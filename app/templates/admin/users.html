@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ t('admin_users') }}{% endblock %}
+{% block content %}
+<div class="container">
+  <h1>{{ t('admin_users') }}</h1>
+  <p><a href="{{ url_for('admin.dashboard') }}">&larr; {{ t('back') }}</a></p>
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>{{ t('col_id') }}</th>
+          <th>{{ t('name') }}</th>
+          <th>{{ t('phone') }}</th>
+          <th>{{ t('role') }}</th>
+          <th>{{ t('city') }}</th>
+          <th>{{ t('joined') }}</th>
+          <th>{{ t('status') }}</th>
+          <th>{{ t('warnings_label') }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>{{ u.public_id }}</td>
+          <td>{{ u.name }}</td>
+          <td>{{ u.phone }}</td>
+          <td>{% if u.role == 'landlord' %}{{ t('role_landlord') }}{% elif u.role == 'renter' %}{{ t('role_renter') }}{% elif u.role == 'dealer' %}{{ t('role_dealer') }}{% if u.dealer_verified %} {{ t('dealer_badge') }}{% endif %}{% else %}{{ t('role_admin') }}{% endif %}</td>
+          <td>{{ u.city }}</td>
+          <td>{{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '' }}</td>
+          <td>
+            {% if u.is_active %}<span class="badge badge-green">{{ t('status_active') }}</span>
+            {% else %}<span class="badge badge-red">{{ t('status_inactive') }}</span>{% endif %}
+          </td>
+          <td>{% if u.warnings %}<span class="badge badge-yellow">{{ u.warnings }}</span>{% else %}—{% endif %}</td>
+          <td>
+            <form method="post" action="{{ url_for('admin.toggle_user', uid=u.id) }}" style="display:inline">
+              <button type="submit" class="btn btn-small {% if u.is_active %}btn-danger{% else %}btn-primary {% endif %}">
+                {{ t('deactivate') if u.is_active else t('activate') }}
+              </button>
+            </form>
+            {% if u.role != 'admin' %}
+            <form method="post" action="{{ url_for('admin.dealer_manage', uid=u.id) }}" style="display:inline">
+              {% if u.role == 'dealer' %}
+              <input type="hidden" name="action" value="remove_dealer">
+              <button type="submit" class="btn btn-small btn-secondary">{{ t('remove_dealer') }}</button>
+              {% else %}
+              <input type="hidden" name="action" value="make_dealer">
+              <button type="submit" class="btn btn-small btn-secondary">{{ t('make_dealer') }}</button>
+              {% endif %}
+            </form>
+            {% if u.role == 'dealer' %}
+            <form method="post" action="{{ url_for('admin.dealer_manage', uid=u.id) }}" style="display:inline">
+              {% if u.dealer_verified %}
+              <input type="hidden" name="action" value="unverify_badge">
+              <button type="submit" class="btn btn-small btn-secondary">{{ t('unverify_badge') }}</button>
+              {% else %}
+              <input type="hidden" name="action" value="verify_badge">
+              <button type="submit" class="btn btn-small btn-secondary">{{ t('verify_badge') }}</button>
+              {% endif %}
+            </form>
+            <form method="post" action="{{ url_for('admin.dealer_manage', uid=u.id) }}" style="display:inline">
+              <input type="hidden" name="action" value="set_share">
+              <input type="number" name="dealer_share" value="{{ u.dealer_share }}" min="0" max="30" step="0.5" style="width:60px" title="{{ t('dealer_share_label') }}">
+              <button type="submit" class="btn btn-small btn-secondary">{{ t('set_share') }}</button>
+            </form>
+            {% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
