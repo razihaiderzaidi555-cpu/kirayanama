@@ -231,3 +231,10 @@ img.thumb{width:74px;height:54px;object-fit:cover;border-radius:6px;border:1px s
 .mission-bar:hover .mission-track {
   animation-play-state: paused;
 }
+/* Register role picker: big tap-friendly options */
+.role-pick{display:block !important;border:2px solid var(--gold);border-radius:10px;
+  padding:12px 14px;margin:8px 0 !important;cursor:pointer;font-weight:700;
+  background:#fffdf4}
+.role-pick input{width:20px;height:20px;accent-color:var(--green-dark);
+  vertical-align:middle;margin-left:8px}
+.role-pick:has(input:checked){background:#f3e2a0;border-color:var(--green-dark)}
