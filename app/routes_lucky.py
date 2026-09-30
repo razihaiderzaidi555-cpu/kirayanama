@@ -4,15 +4,23 @@ Public:  /r/<code>      -> capture referral, redirect to register
          /lucky-draw    -> wheel page, token balance, share links, winners
 """
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, g, abort
-from flask_login import current_user
+from flask import Blueprint, render_template, request, redirect, url_for, session, g, abort, jsonify
+from flask_login import current_user, login_required
 
-from models import db, User, TokenLedger, Draw, token_balance, ensure_referral_code
+from models import (db, User, TokenLedger, Draw, WheelSpin, token_balance,
+                    ensure_referral_code, wheel_spins_total, wheel_spins_24h)
 from translations import get_text
 
 bp = Blueprint("lucky", __name__)
+
+# Wheel rules (owner-approved 2026-09-30):
+SPINS_PER_DAY = 3          # max spins per user per rolling 24 hours
+RENT_SPINS_GOAL = 1000     # cumulative spins at which a renter wins free rent
+WHEEL_RENT_TITLE = "🎡 وہیل: 1000 اسپن مکمل"  # marks the one-time wheel rent prize
+# Segment indices on the 8-slice wheel that show the rent prize:
+RENT_SEGMENTS = (3, 7)
 
 
 def T(key):
@@ -62,7 +70,57 @@ def lucky_draw():
         balance=balance, ref_link=ref_link, ref_code=ref_code,
         winners=winners, latest=latest,
         participants=participants, total_tokens=int(total_tokens),
+        spins_total=wheel_spins_total(current_user.id) if current_user.is_authenticated else 0,
+        spins_left_today=(SPINS_PER_DAY - wheel_spins_24h(current_user.id)) if current_user.is_authenticated else SPINS_PER_DAY,
+        spins_per_day=SPINS_PER_DAY, rent_spins_goal=RENT_SPINS_GOAL,
     )
+
+
+@bp.route("/lucky-draw/spin", methods=["POST"])
+@login_required
+def spin():
+    """Server-authoritative wheel spin.
+
+    Enforces max 3 spins per rolling 24h. Records every spin. Awards one
+    month of free rent (Draw record) the first time a renter reaches
+    1000 cumulative spins. Returns the wheel segment the client must land on.
+    """
+    if not current_user.is_active:
+        abort(403)
+    used_24h = wheel_spins_24h(current_user.id)
+    if used_24h >= SPINS_PER_DAY:
+        return jsonify({"ok": False, "error": "limit",
+                        "message": T("draw_limit_reached")}), 429
+
+    db.session.add(WheelSpin(user_id=current_user.id))
+    db.session.commit()
+    total = wheel_spins_total(current_user.id)
+    spins_left = SPINS_PER_DAY - used_24h - 1
+
+    won_rent = False
+    already_won = Draw.query.filter_by(winner_id=current_user.id,
+                                       title=WHEEL_RENT_TITLE).first()
+    if (current_user.role == "renter" and total >= RENT_SPINS_GOAL
+            and not already_won):
+        db.session.add(Draw(title=WHEEL_RENT_TITLE, status="drawn",
+                            winner_id=current_user.id,
+                            drawn_at=datetime.utcnow(),
+                            prize="prize_1month"))
+        db.session.commit()
+        won_rent = True
+
+    segment = random.choice(RENT_SEGMENTS) if won_rent else random.choice(
+        [i for i in range(8) if i not in RENT_SEGMENTS])
+
+    return jsonify({
+        "ok": True,
+        "segment": segment,
+        "total_spins": total,
+        "spins_left_today": spins_left,
+        "spins_to_rent": max(0, RENT_SPINS_GOAL - total),
+        "won_rent": won_rent,
+        "is_renter": current_user.role == "renter",
+    })
 
 
 def run_weighted_draw(title, prize_key="prize_1month"):
