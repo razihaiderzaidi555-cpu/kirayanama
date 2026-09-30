@@ -102,6 +102,11 @@ def listing_detail(listing_id):
     return render_template("public/detail.html", listing=listing)
 
 
+@bp.route("/sharait-o-zawabit")
+def sharait():
+    return render_template("public/sharait.html")
+
+
 @bp.route("/sitemap.xml")
 def sitemap():
     urls = [
