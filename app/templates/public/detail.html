@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ listing.title_ur if lang=='ur' else (listing.title_en or listing.title_ur) }} | {{ t('app_name') }}{% endblock %}
+{% block content %}
+{% set ph = listing.primary_photo %}
+{% if ph %}<img class="detail-img" src="{{ url_for('static', filename='uploads/listings/' + ph.filename) }}" alt="">{% endif %}
+{% if listing.photos|length > 1 %}
+<div class="gallery">
+  {% for p in listing.photos %}{% if not p.is_primary %}
+  <img class="thumb" style="width:100%;height:110px" src="{{ url_for('static', filename='uploads/listings/' + p.filename) }}" alt="">
+  {% endif %}{% endfor %}
+</div>
+{% endif %}
+
+<h1>{{ listing.title_ur if lang=='ur' else (listing.title_en or listing.title_ur) }}</h1>
+{% if listing.landlord and listing.landlord.is_dealer() and listing.landlord.dealer_verified %}
+<p><span class="badge badge-green">{{ t('dealer_badge') }}</span> <small class="muted">{{ t('verified_dealer_note') }}</small></p>
+{% endif %}
+<p class="rent" style="font-size:1.4em">{{ t('rs') }} {{ "{:,}".format(listing.monthly_rent) }} / {{ t('per_month') }}</p>
+<div class="specs">
+  <span>📍 {{ city_name(listing.city) }}</span>
+  {% if listing.area %}<span>{{ t('area') }}: {{ listing.area }}</span>{% endif %}
+  <span>{{ t('type_' + listing.property_type) }}</span>
+  {% if listing.bedrooms %}<span>{{ t('bedrooms') }}: {{ listing.bedrooms }}</span>{% endif %}
+  {% if listing.bathrooms %}<span>{{ t('bathrooms') }}: {{ listing.bathrooms }}</span>{% endif %}
+  {% if listing.area_sqft %}<span>{{ listing.area_sqft }} {{ t('sqft') }}</span>{% endif %}
+</div>
+<p>{{ listing.desc_ur if lang=='ur' else (listing.desc_en or listing.desc_ur) }}</p>
+<p class="muted"><small>🔒 {{ t('masked_address_note') }}</small></p>
+
+{% if current_user.is_authenticated %}
+  {% if current_user.id != listing.landlord_id %}
+  <form id="contactForm" method="post" action="{{ url_for('contact.contact', listing_id=listing.id) }}">
+    <button type="button" class="btn btn-primary" onclick="document.getElementById('confirmDlg').classList.add('open')">📞 {{ t('contact_btn') }}</button>
+  </form>
+  <div class="dialog-box" id="confirmDlg">
+    <div class="box">
+      <h3>{{ t('confirm_title') }}</h3>
+      <p>{{ t('confirm_body') }}</p>
+      <button class="btn btn-primary" onclick="document.getElementById('contactForm').submit()">{{ t('yes_btn') }}</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('confirmDlg').classList.remove('open')">{{ t('no_btn') }}</button>
+    </div>
+  </div>
+  {% endif %}
+{% else %}
+  <p class="alert">{{ t('login_required') }} <a href="{{ url_for('auth.login') }}">{{ t('nav_login') }}</a></p>
+{% endif %}
+{% endblock %}
