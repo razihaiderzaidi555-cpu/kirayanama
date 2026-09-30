@@ -122,8 +122,9 @@
       if(p < 1){ requestAnimationFrame(frame); }
       else {
         spinning = false;
-        var idx = n - 1 - Math.floor(((angle % (Math.PI*2)) + Math.PI*2) % (Math.PI*2) / arc);
-        idx = ((idx % n) + n) % n;
+        // Pointer sits at the TOP of the wheel: canvas angle 3*PI/2 (y-down coords).
+        var rel = (((Math.PI*1.5 - angle) % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+        var idx = Math.floor(rel / arc) % n;
         document.getElementById('spinResult').textContent = '🎉 ' + labels[idx];
       }
     }
