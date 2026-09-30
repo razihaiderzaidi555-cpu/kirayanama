@@ -1,5 +1,5 @@
 """KirayaNama data models. Single source of truth — workers import from here, do not redefine."""
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -169,6 +169,36 @@ class Draw(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     winner = db.relationship("User", foreign_keys=[winner_id])
+
+
+class WheelSpin(db.Model):
+    """Every wheel spin is recorded server-side.
+
+    Used for: max 3 spins per rolling 24h, and the cumulative counter that
+    awards one month of free rent to renters at 1000 total spins.
+    """
+    __tablename__ = "wheel_spins"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship("User", foreign_keys=[user_id])
+
+
+def wheel_spins_total(user_id):
+    """Cumulative spin count for a user."""
+    if not user_id:
+        return 0
+    return WheelSpin.query.filter_by(user_id=user_id).count()
+
+
+def wheel_spins_24h(user_id):
+    """Spins in the last rolling 24 hours."""
+    if not user_id:
+        return 0
+    day_ago = datetime.utcnow() - timedelta(hours=24)
+    return (WheelSpin.query.filter_by(user_id=user_id)
+            .filter(WheelSpin.created_at > day_ago).count())
 
 
 def get_setting(key, default=""):
