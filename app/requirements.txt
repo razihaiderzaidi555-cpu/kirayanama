@@ -3,3 +3,4 @@ flask-sqlalchemy
 flask-login
 pillow
 gunicorn
+psycopg2-binary
