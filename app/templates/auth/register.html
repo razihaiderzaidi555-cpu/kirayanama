@@ -2,7 +2,7 @@
 {% block title %}{{ t('register_title') }}{% endblock %}
 {% block content %}
 <div class="container">
-  <div class="card dialog-box">
+  <div class="card">
     <h1>{{ t('register_title') }}</h1>
     {% if ref_name %}
     <div class="alert alert-ok">🎁 {{ t('ref_invite_note').format(name=ref_name) }}</div>
@@ -24,15 +24,12 @@
       </div>
       <div class="form-group">
         <label>{{ t('role') }}</label>
-        <label><input type="radio" name="role" value="renter"
+        <label class="role-pick"><input type="radio" name="role" value="renter"
           {% if request.form.get('role', 'renter') == 'renter' %}checked{% endif %}>
           {{ t('role_renter') }}</label><br>
-        <label><input type="radio" name="role" value="landlord"
+        <label class="role-pick"><input type="radio" name="role" value="landlord"
           {% if request.form.get('role') == 'landlord' %}checked{% endif %}>
-          {{ t('role_landlord') }}</label><br>
-        <label><input type="radio" name="role" value="dealer"
-          {% if request.form.get('role') == 'dealer' %}checked{% endif %}>
-          {{ t('role_dealer') }}</label>
+          {{ t('role_landlord') }}</label>
       </div>
       <div class="form-group">
         <label for="city">{{ t('city') }}</label>
