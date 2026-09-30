@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}{{ t('request_title') }}{% endblock %}
+{% block content %}
+<div class="container">
+  <h2>{{ t('request_title') }}</h2>
+  <p class="muted">{{ listing.title_ur if lang=='ur' else listing.title_en }} — {{ t('rent') }}: {{ listing.monthly_rent }}</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for cat, m in messages %}
+        <div class="alert {{ 'alert-ok' if cat=='ok' else 'alert-err' }}">{{ t(m) }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  <div class="steps">
+    <div class="step{% if cr.status=='pending_yes' %} step-active{% endif %}">{{ t('step_consent') }}</div>
+    <div class="step{% if cr.status=='awaiting_payment' %} step-active{% endif %}">{{ t('step_payment') }}</div>
+    <div class="step{% if cr.status=='in_review' %} step-active{% endif %}">{{ t('step_review') }}</div>
+    <div class="step{% if cr.status=='unlocked' %} step-active{% endif %}">{{ t('step_unlocked') }}</div>
+  </div>
+
+  <div class="card">
+    {% if cr.status == 'pending_yes' %}
+      {% if is_renter %}
+        <p>{{ t('waiting_landlord') }}</p>
+      {% elif is_landlord %}
+        <p>{{ t('landlord_confirm_prompt') }}</p>
+        <form method="post" action="{{ url_for('contact.confirm', rid=cr.id) }}">
+          <button class="btn btn-primary" type="submit">{{ t('yes_btn') }}</button>
+        </form>
+      {% endif %}
+
+    {% elif cr.status == 'awaiting_payment' %}
+      <p><strong>{{ t('commission') }}: {{ cr.commission }}</strong></p>
+      <p class="muted">{{ t('platform_numbers') }}: {{ t('jazzcash') }}: {{ jazzcash }} · {{ t('easypaisa') }}: {{ easypaisa }} · {{ t('upaisa') }}: {{ upaisa }} · {{ t('hbl') }}: {{ hbl }}</p>
+      <p>{{ t('payment_instructions') }}</p>
+      {% if is_renter and not cr.renter_shot %}
+        <form method="post" action="{{ url_for('contact.payment', rid=cr.id) }}" enctype="multipart/form-data">
+          <div class="form-group">
+            <label>{{ t('upload_shot') }}</label>
+            <input type="file" name="screenshot" accept="image/*" required>
+          </div>
+          <button class="btn btn-primary" type="submit">{{ t('upload_btn') }}</button>
+        </form>
+      {% elif is_renter %}
+        <p class="muted">{{ t('shot_uploaded_wait') }}</p>
+      {% endif %}
+      {% if is_landlord and not cr.landlord_shot %}
+        <form method="post" action="{{ url_for('contact.payment', rid=cr.id) }}" enctype="multipart/form-data">
+          <div class="form-group">
+            <label>{{ t('upload_shot') }}</label>
+            <input type="file" name="screenshot" accept="image/*" required>
+          </div>
+          <button class="btn btn-primary" type="submit">{{ t('upload_btn') }}</button>
+        </form>
+      {% elif is_landlord %}
+        <p class="muted">{{ t('shot_uploaded_wait') }}</p>
+      {% endif %}
+
+    {% elif cr.status == 'in_review' %}
+      <p>{{ t('in_review_msg') }}</p>
+
+    {% elif cr.status == 'unlocked' %}
+      {% if is_renter %}
+        <p>{{ t('unlocked_msg') }}</p>
+        <p><a class="btn btn-primary" href="tel:{{ cr.landlord.phone }}">{{ cr.landlord.phone }}</a></p>
+        {% if listing.exact_address %}
+        <p><strong>{{ t('exact_address_after_unlock') }}:</strong> {{ listing.exact_address }}</p>
+        {% endif %}
+      {% elif is_landlord %}
+        <p>{{ t('landlord_unlocked_msg') }}</p>
+        {% if listing.exact_address %}
+        <p><strong>{{ t('exact_address_after_unlock') }}:</strong> {{ listing.exact_address }}</p>
+        {% endif %}
+      {% endif %}
+
+    {% elif cr.status == 'rejected' %}
+      <p>{{ t('rejected_msg') }}</p>
+
+    {% elif cr.status == 'cancelled' %}
+      <p>{{ t('request_cancelled') }}</p>
+    {% endif %}
+
+    {% if cr.status in ('pending_yes', 'awaiting_payment') and (is_renter or is_landlord) %}
+    <form method="post" action="{{ url_for('contact.cancel', rid=cr.id) }}" style="margin-top:12px">
+      <button class="btn btn-secondary btn-small" type="submit">{{ t('cancel_request') }}</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
