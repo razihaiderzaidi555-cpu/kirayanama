@@ -23,7 +23,18 @@
         <canvas id="drawWheel" width="300" height="300"></canvas>
         <div class="wheel-pointer">▼</div>
       </div>
-      <p><button class="btn btn-gold" id="spinBtn" type="button">{{ t('draw_spin_demo') }}</button></p>
+      {% if current_user.is_authenticated %}
+      <p class="spin-stats">🪙 {{ t('draw_total_spins') }}: <strong id="totalSpins">{{ spins_total }}</strong>
+        &nbsp;•&nbsp; {{ t('draw_spins_left_today') }}: <strong id="spinsLeft">{{ spins_left_today }}</strong></p>
+      {% if current_user.role == 'renter' %}
+      <p class="muted">🎁 {{ t('draw_rent_progress') }}: <strong id="spinsToRent">{{ [rent_spins_goal - spins_total, 0] | max }}</strong></p>
+      {% else %}
+      <p class="muted"><small>{{ t('draw_rent_only_renters') }}</small></p>
+      {% endif %}
+      <p><button class="btn btn-gold" id="spinBtn" type="button" {% if spins_left_today <= 0 %}disabled{% endif %}>{{ t('draw_spin_btn') }}</button></p>
+      {% else %}
+      <p><a class="btn btn-gold" href="{{ url_for('auth.login') }}">{{ t('draw_login_to_spin') }}</a></p>
+      {% endif %}
       <p class="muted" id="spinResult"></p>
       <p class="muted"><small>{{ t('draw_spin_note') }}</small></p>
     </div>
@@ -109,27 +120,52 @@
   }
   drawWheel();
 
-  document.getElementById('spinBtn').addEventListener('click', function(){
-    if(spinning) return; spinning = true;
-    var target = Math.random()*Math.PI*2 + Math.PI*10; // 5+ full turns
-    var start = null, dur = 4200, from = angle;
-    function frame(ts){
-      if(!start) start = ts;
-      var p = Math.min((ts-start)/dur, 1);
-      var eased = 1 - Math.pow(1-p, 3);
-      angle = from + target*eased;
-      drawWheel();
-      if(p < 1){ requestAnimationFrame(frame); }
-      else {
-        spinning = false;
-        // Pointer sits at the TOP of the wheel: canvas angle 3*PI/2 (y-down coords).
-        var rel = (((Math.PI*1.5 - angle) % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
-        var idx = Math.floor(rel / arc) % n;
-        document.getElementById('spinResult').textContent = '🎉 ' + labels[idx];
-      }
-    }
-    requestAnimationFrame(frame);
-  });
+  var spinBtn = document.getElementById('spinBtn');
+  if(spinBtn){
+    spinBtn.addEventListener('click', function(){
+      if(spinning) return; spinning = true;
+      var btn = this; btn.disabled = true;
+      document.getElementById('spinResult').textContent = '';
+      fetch('{{ url_for("lucky.spin") }}', {method: 'POST'})
+        .then(function(r){ return r.json().then(function(j){ return {status: r.status, body: j}; }); })
+        .then(function(res){
+          var j = res.body;
+          if(!j.ok){
+            spinning = false; btn.disabled = false;
+            document.getElementById('spinResult').textContent = '⛔ ' + (j.message || '');
+            return;
+          }
+          // Server chose segment j.segment — rotate so the TOP pointer
+          // lands on its middle: (3π/2 - angle) mod 2π = (seg+0.5)*arc.
+          var segArc = Math.PI*2/n;
+          var relTarget = (j.segment + 0.5) * segArc;
+          var cur = (((Math.PI*1.5 - angle) % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+          var delta = (((cur - relTarget) % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+          var total = Math.PI*2*5 + delta; // 5 full turns, then land
+          var start = null, dur = 4200, from = angle;
+          function frame(ts){
+            if(!start) start = ts;
+            var p = Math.min((ts-start)/dur, 1);
+            var eased = 1 - Math.pow(1-p, 3);
+            angle = from + total*eased;
+            drawWheel();
+            if(p < 1){ requestAnimationFrame(frame); }
+            else {
+              spinning = false;
+              var msg = j.won_rent ? '{{ t("draw_won_rent") }}' : ('🎉 ' + labels[j.segment]);
+              document.getElementById('spinResult').textContent = msg;
+              document.getElementById('totalSpins').textContent = j.total_spins;
+              document.getElementById('spinsLeft').textContent = j.spins_left_today;
+              var el = document.getElementById('spinsToRent');
+              if(el) el.textContent = j.spins_to_rent;
+              btn.disabled = (j.spins_left_today <= 0);
+            }
+          }
+          requestAnimationFrame(frame);
+        })
+        .catch(function(){ spinning = false; btn.disabled = false; });
+    });
+  }
 })();
 
 function copyRef(){
