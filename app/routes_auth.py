@@ -36,8 +36,8 @@ def register():
         password = request.form.get("password") or ""
         role = request.form.get("role") or "renter"
         city = request.form.get("city") or ""
-        if role not in ("landlord", "renter", "dealer"):
-            role = "renter"
+        if role not in ("landlord", "renter"):
+            role = "renter"  # public signup: only renter/landlord (dealer via admin)
         if city not in CITIES:
             city = ""
         if not name:
