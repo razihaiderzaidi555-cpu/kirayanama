@@ -62,6 +62,9 @@ class Listing(db.Model):
     city = db.Column(db.String(40), nullable=False)  # chiniot/lalian/bhuwana
     area = db.Column(db.String(120), default="")  # mohalla/society — PUBLIC
     exact_address = db.Column(db.String(255), default="")  # street/house no — MASKED until unlock
+    # map pin set by landlord AFTER the deal unlocks; shown to the renter of that deal only
+    location_lat = db.Column(db.Float, nullable=True)
+    location_lng = db.Column(db.Float, nullable=True)
     property_type = db.Column(db.String(20), default="house")
     bedrooms = db.Column(db.Integer, default=0)
     bathrooms = db.Column(db.Integer, default=0)
