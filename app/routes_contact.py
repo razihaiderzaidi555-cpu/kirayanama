@@ -73,6 +73,32 @@ def confirm(rid):
     return redirect(url_for("contact.request_detail", rid=cr.id))
 
 
+@bp.route("/request/<int:rid>/location", methods=["POST"])
+@login_required
+def save_location(rid):
+    """Landlord pins the property location on the map AFTER the deal unlocks.
+    Only the renter of this deal can see it (on the request page)."""
+    cr = _get_request_or_403(rid)
+    if current_user.id != cr.landlord_id:
+        abort(403)
+    if cr.status != "unlocked":
+        abort(400)
+    try:
+        lat = float(request.form.get("lat", ""))
+        lng = float(request.form.get("lng", ""))
+    except (TypeError, ValueError):
+        flash("location_invalid", "err")
+        return redirect(url_for("contact.request_detail", rid=cr.id))
+    if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+        flash("location_invalid", "err")
+        return redirect(url_for("contact.request_detail", rid=cr.id))
+    cr.listing.location_lat = lat
+    cr.listing.location_lng = lng
+    db.session.commit()
+    flash("location_saved", "ok")
+    return redirect(url_for("contact.request_detail", rid=cr.id))
+
+
 @bp.route("/request/<int:rid>/cancel", methods=["POST"])
 @login_required
 def cancel(rid):
