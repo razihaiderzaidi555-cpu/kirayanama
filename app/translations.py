@@ -519,6 +519,14 @@ TRANSLATIONS["ur"].update({
     "cancel_request": "درخواست منسوخ کریں",
     "exact_address_after_unlock": "مکان کا صحیح پتہ",
     "verified_dealer_note": "یہ لسٹنگ ایک تصدیق شدہ ڈیلر نے لگائی ہے۔",
+    "location_pin_title": "📍 مکان کی لوکیشن",
+    "location_pin_prompt": "نقشے پر کلک کر کے مکان کی صحیح جگہ پن لگائیں، پھر محفوظ کریں۔ یہ لوکیشن صرف اس ڈیل کے کرایہ دار کو نظر آئے گی۔",
+    "location_save_btn": "لوکیشن محفوظ کریں",
+    "location_saved": "لوکیشن محفوظ ہو گئی۔",
+    "location_invalid": "غلط لوکیشن — دوبارہ کوشش کریں۔",
+    "location_open_maps": "گوگل میپس میں کھولیں",
+    "location_not_set": "مالک مکان نے ابھی لوکیشن پن نہیں کی۔",
+    "location_update_hint": "پن تبدیل کرنا ہو تو نقشے پر دوبارہ کلک کر کے محفوظ کریں۔",
 })
 TRANSLATIONS["en"].update({
     "request_cancelled": "Request cancelled.",
@@ -562,4 +570,12 @@ TRANSLATIONS["en"].update({
     "cancel_request": "Cancel request",
     "exact_address_after_unlock": "Property's exact address",
     "verified_dealer_note": "This listing was posted by a verified dealer.",
+    "location_pin_title": "📍 Property Location",
+    "location_pin_prompt": "Click on the map to pin the property's exact location, then save. Only this deal's renter will see it.",
+    "location_save_btn": "Save Location",
+    "location_saved": "Location saved.",
+    "location_invalid": "Invalid location — please try again.",
+    "location_open_maps": "Open in Google Maps",
+    "location_not_set": "The landlord hasn't pinned the location yet.",
+    "location_update_hint": "To move the pin, click on the map again and save.",
 })
