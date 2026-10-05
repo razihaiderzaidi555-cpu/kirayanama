@@ -47,6 +47,24 @@ def dashboard():
     return render_template("admin/dashboard.html", stats=stats)
 
 
+@bp.route("/backup")
+@admin_required
+def backup():
+    """Download a copy of the database (SQLite). Weekly auto-backup runs on PA."""
+    import os
+    from flask import current_app, send_file
+    uri = current_app.config["SQLALCHEMY_DATABASE_URI"]
+    if not uri.startswith("sqlite:///"):
+        flash(_t("backup_postgres_note"), "err")
+        return redirect(url_for("admin.dashboard"))
+    db_path = uri.replace("sqlite:///", "", 1)
+    if not os.path.exists(db_path):
+        flash(_t("backup_missing"), "err")
+        return redirect(url_for("admin.dashboard"))
+    return send_file(db_path, as_attachment=True,
+                     download_name="kirayanama-backup.db")
+
+
 @bp.route("/users")
 @admin_required
 def users():
@@ -160,6 +178,11 @@ def verify_payment(rid):
         award_tokens(req.renter_id, TOKEN_DEAL_ENTRY, "deal_entry")
         award_tokens(req.landlord_id, TOKEN_DEAL_ENTRY, "deal_entry")
         db.session.commit()
+        try:
+            from mailer import notify_unlocked
+            notify_unlocked(req)
+        except Exception:
+            pass
         flash(_t("verified_msg"))
     return redirect(url_for("admin.payments"))
 
