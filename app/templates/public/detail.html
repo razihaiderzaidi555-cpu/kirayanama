@@ -1,5 +1,13 @@
 {% extends "base.html" %}
 {% block title %}{{ listing.title_ur if lang=='ur' else (listing.title_en or listing.title_ur) }} | {{ t('app_name') }}{% endblock %}
+{% block extra_head %}
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{ t('app_name') }}">
+<meta property="og:title" content="{{ listing.title_ur if lang=='ur' else (listing.title_en or listing.title_ur) }} — {{ t('rs') }} {{ '{:,}'.format(listing.monthly_rent or 0) }}/{{ t('per_month') }}">
+<meta property="og:description" content="{{ city_name(listing.city) }}{% if listing.area %}، {{ listing.area }}{% endif %} — {{ t('app_name') }}">
+<meta property="og:url" content="{{ request.url }}">
+{% if listing.primary_photo %}<meta property="og:image" content="{{ request.host_url.rstrip('/') }}{{ url_for('static', filename='uploads/listings/' + listing.primary_photo.filename) }}">{% endif %}
+{% endblock %}
 {% block content %}
 {% set ph = listing.primary_photo %}
 {% if ph %}<img class="detail-img" src="{{ url_for('static', filename='uploads/listings/' + ph.filename) }}" alt="">{% endif %}
@@ -26,6 +34,9 @@
 </div>
 <p>{{ listing.desc_ur if lang=='ur' else (listing.desc_en or listing.desc_ur) }}</p>
 <p class="muted"><small>🔒 {{ t('masked_address_note') }}</small></p>
+{% if avg_rating %}
+<p>⭐ <strong>{{ avg_rating }}/5</strong> <small class="muted">({{ t('n_ratings').format(n=rating_count) }})</small></p>
+{% endif %}
 
 {% if current_user.is_authenticated %}
   {% if current_user.id != listing.landlord_id %}
@@ -44,4 +55,5 @@
 {% else %}
   <p class="alert">{{ t('login_required') }} <a href="{{ url_for('auth.login') }}">{{ t('nav_login') }}</a></p>
 {% endif %}
+<p style="margin-top:1em"><a class="btn btn-whatsapp" href="{{ share_url }}" target="_blank" rel="noopener">📲 {{ t('share_whatsapp') }}</a></p>
 {% endblock %}
