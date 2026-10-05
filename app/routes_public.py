@@ -4,6 +4,7 @@ Only approved listings are ever visible here. No landlord phone numbers
 are exposed on any public page (the contact flow lives in routes_contact).
 """
 from flask import Blueprint, render_template, request, Response, abort, url_for
+from urllib.parse import quote
 
 from models import db, Listing, CITIES, PROPERTY_TYPES, Draw
 
@@ -11,7 +12,7 @@ bp = Blueprint("public", __name__)
 
 
 def _approved():
-    return Listing.query.filter_by(status="approved")
+    return Listing.query.filter_by(status="approved", is_closed=False)
 
 
 @bp.route("/")
@@ -94,12 +95,24 @@ def listings_page():
 @bp.route("/listing/<int:listing_id>")
 def listing_detail(listing_id):
     listing = Listing.query.get_or_404(listing_id)
-    if listing.status != "approved":
+    if listing.status != "approved" or listing.is_closed:
         abort(404)
     # Anti-bypass monitoring: count views (only committed for approved listings).
     listing.view_count = (listing.view_count or 0) + 1
     db.session.commit()
-    return render_template("public/detail.html", listing=listing)
+    # WhatsApp share link: title + rent + city + page URL, pre-encoded.
+    title = listing.title_ur if listing.title_ur else listing.title_en
+    share_text = "{} — {} {:,}/{}، {} | {}\n{}".format(
+        title, "روپے", listing.monthly_rent or 0, "ماہانہ",
+        listing.city, "کرایہ نامہ", request.url)
+    share_url = "https://wa.me/?text=" + quote(share_text)
+    # Landlord's average rating from completed deals.
+    from models import Rating
+    _ratings = Rating.query.filter_by(landlord_id=listing.landlord_id).all()
+    avg_rating = round(sum(r.stars for r in _ratings) / len(_ratings), 1) if _ratings else None
+    return render_template("public/detail.html", listing=listing,
+                           share_url=share_url, avg_rating=avg_rating,
+                           rating_count=len(_ratings))
 
 
 @bp.route("/sharait-o-zawabit")
