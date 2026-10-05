@@ -73,15 +73,15 @@ def create_app():
 
     with app.app_context():
         db.create_all()
-        _migrate_location_columns()
+        _migrate_schema()
         _ensure_production_defaults()
 
     return app
 
 
-def _migrate_location_columns():
-    """Add Listing.location_lat/location_lng to DBs created before the columns
-    existed (create_all never alters existing tables). Safe to run every boot."""
+def _migrate_schema():
+    """Add new columns to DBs created before they existed (create_all never
+    alters existing tables). Safe to run every boot."""
     from sqlalchemy import inspect, text
     cols = {c["name"] for c in inspect(db.engine).get_columns("listings")}
     stmts = []
@@ -89,6 +89,12 @@ def _migrate_location_columns():
         stmts.append("ALTER TABLE listings ADD COLUMN location_lat FLOAT")
     if "location_lng" not in cols:
         stmts.append("ALTER TABLE listings ADD COLUMN location_lng FLOAT")
+    if "is_closed" not in cols:
+        stmts.append("ALTER TABLE listings ADD COLUMN is_closed BOOLEAN DEFAULT 0")
+    # users.email
+    ucols = {c["name"] for c in inspect(db.engine).get_columns("users")}
+    if "email" not in ucols:
+        stmts.append("ALTER TABLE users ADD COLUMN email VARCHAR(120)")
     if stmts:
         with db.engine.begin() as conn:
             for s in stmts:
