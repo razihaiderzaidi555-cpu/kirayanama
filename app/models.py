@@ -23,6 +23,7 @@ class User(UserMixin, db.Model):
     public_id = db.Column(db.String(16), unique=True, nullable=False)  # KN-1001
     name = db.Column(db.String(120), nullable=False)
     phone = db.Column(db.String(20), unique=True, nullable=False)  # login id
+    email = db.Column(db.String(120), nullable=True)  # for OTP recovery + notifications
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default="renter")  # landlord/renter/dealer/admin
     city = db.Column(db.String(40), default="")
@@ -65,6 +66,8 @@ class Listing(db.Model):
     # map pin set by landlord AFTER the deal unlocks; shown to the renter of that deal only
     location_lat = db.Column(db.Float, nullable=True)
     location_lng = db.Column(db.Float, nullable=True)
+    # landlord closed the listing after renting out — hidden from public browse
+    is_closed = db.Column(db.Boolean, default=False)
     property_type = db.Column(db.String(20), default="house")
     bedrooms = db.Column(db.Integer, default=0)
     bathrooms = db.Column(db.Integer, default=0)
@@ -138,6 +141,34 @@ class Setting(db.Model):
     __tablename__ = "settings"
     key = db.Column(db.String(80), primary_key=True)
     value = db.Column(db.String(255), default="")
+
+
+class PasswordReset(db.Model):
+    """Email-OTP password recovery. Codes are hashed; expire in 10 minutes."""
+    __tablename__ = "password_resets"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    code_hash = db.Column(db.String(255), nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean, default=False)
+    attempts = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship("User")
+
+
+class Rating(db.Model):
+    """Renter rates the landlord after a deal unlocks — one per deal."""
+    __tablename__ = "ratings"
+    id = db.Column(db.Integer, primary_key=True)
+    contact_request_id = db.Column(db.Integer, db.ForeignKey("contact_requests.id"),
+                                   unique=True, nullable=False)
+    listing_id = db.Column(db.Integer, db.ForeignKey("listings.id"), nullable=False)
+    renter_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    landlord_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    stars = db.Column(db.Integer, nullable=False)  # 1-5
+    comment = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 # ---------- Lucky Draw: free token ledger + draws ----------
