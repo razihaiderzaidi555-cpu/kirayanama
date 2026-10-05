@@ -19,6 +19,12 @@
                value="{{ request.form.get('phone', '') }}">
       </div>
       <div class="form-group">
+        <label for="email">{{ t('email') }} <small class="muted">({{ t('optional') }})</small></label>
+        <input id="email" name="email" type="email"
+               value="{{ request.form.get('email', '') }}">
+        <small class="muted">{{ t('email_hint') }}</small>
+      </div>
+      <div class="form-group">
         <label for="password">{{ t('password') }}</label>
         <input id="password" name="password" type="password" required minlength="6">
       </div>
