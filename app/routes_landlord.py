@@ -45,6 +45,11 @@ def _to_int(value, default=0):
         return default
 
 
+def _has_uploaded_photos():
+    """True if the POST contains at least one non-empty photo file."""
+    return any(f and f.filename for f in request.files.getlist("photos"))
+
+
 def _save_photos(listing, make_first_primary):
     """Save uploaded photos (first saved one becomes primary if asked)."""
     base = len(listing.photos)
@@ -155,6 +160,8 @@ def listing_new():
     if request.method == "POST":
         data = _read_listing_form()
         err = _validate_listing_form(data)
+        if not err and not _has_uploaded_photos():
+            err = T("photo_required")
         if err:
             flash(err)
         else:
@@ -184,6 +191,8 @@ def listing_edit(listing_id):
     if request.method == "POST":
         data = _read_listing_form()
         err = _validate_listing_form(data)
+        if not err and not listing.photos and not _has_uploaded_photos():
+            err = T("photo_required")
         if err:
             flash(err)
         else:
@@ -199,6 +208,33 @@ def listing_edit(listing_id):
             return redirect(url_for("landlord.dashboard"))
     return render_template("landlord/listing_form.html", listing=listing,
                            cities=CITIES, ptypes=PROPERTY_TYPES)
+
+
+@bp.route("/listings/<int:listing_id>/close", methods=["POST"])
+@landlord_required
+def listing_close(listing_id):
+    """Landlord marks a listing as rented out — hidden from public browse."""
+    listing = Listing.query.get_or_404(listing_id)
+    if listing.landlord_id != current_user.id and current_user.role != "admin":
+        flash(T("not_owner"))
+        return redirect(url_for("landlord.dashboard"))
+    listing.is_closed = True
+    db.session.commit()
+    flash(T("listing_closed"))
+    return redirect(url_for("landlord.dashboard"))
+
+
+@bp.route("/listings/<int:listing_id>/reopen", methods=["POST"])
+@landlord_required
+def listing_reopen(listing_id):
+    listing = Listing.query.get_or_404(listing_id)
+    if listing.landlord_id != current_user.id and current_user.role != "admin":
+        flash(T("not_owner"))
+        return redirect(url_for("landlord.dashboard"))
+    listing.is_closed = False
+    db.session.commit()
+    flash(T("listing_reopened"))
+    return redirect(url_for("landlord.dashboard"))
 
 
 @bp.route("/requests")
