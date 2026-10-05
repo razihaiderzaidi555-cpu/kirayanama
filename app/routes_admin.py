@@ -2,12 +2,13 @@
 /admin/listings, /admin/payments, /admin/settings, /admin/monitoring + POST actions."""
 from functools import wraps
 from datetime import datetime
+import os
 
 from models import (db, User, Listing, ContactRequest, Setting, get_setting,
                     SUSPICIOUS_MIN_VIEWS, SUSPICIOUS_MIN_CANCELLATIONS,
                     Draw, TokenLedger, token_balance, award_tokens, TOKEN_DEAL_ENTRY)
 from routes_lucky import run_weighted_draw
-from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, g
+from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, g, send_file, current_app
 from flask_login import login_required, current_user
 from translations import get_text
 
@@ -50,19 +51,41 @@ def dashboard():
 @bp.route("/backup")
 @admin_required
 def backup():
-    """Download a copy of the database (SQLite). Weekly auto-backup runs on PA."""
-    import os
-    from flask import current_app, send_file
-    uri = current_app.config["SQLALCHEMY_DATABASE_URI"]
-    if not uri.startswith("sqlite:///"):
+    """Download a copy of the database (SQLite)."""
+    path = _backup_db_path()
+    if path is None:
         flash(_t("backup_postgres_note"), "err")
         return redirect(url_for("admin.dashboard"))
-    db_path = uri.replace("sqlite:///", "", 1)
-    if not os.path.exists(db_path):
+    if not os.path.exists(path):
         flash(_t("backup_missing"), "err")
         return redirect(url_for("admin.dashboard"))
-    return send_file(db_path, as_attachment=True,
+    return send_file(path, as_attachment=True,
                      download_name="kirayanama-backup.db")
+
+
+@bp.route("/cron-backup")
+def cron_backup():
+    """Token-authenticated DB download for the weekly auto-backup cron.
+
+    No login needed — the long random BACKUP_KEY (server env only, never in
+    git) acts as the credential. Wrong/missing key -> 404 (no info leak).
+    """
+    key = os.environ.get("BACKUP_KEY")
+    if not key or request.args.get("key") != key:
+        abort(404)
+    path = _backup_db_path()
+    if path is None or not os.path.exists(path):
+        abort(404)
+    return send_file(path, as_attachment=True,
+                     download_name="kirayanama-backup.db")
+
+
+def _backup_db_path():
+    """Return the SQLite file path, or None for non-sqlite DBs."""
+    uri = current_app.config["SQLALCHEMY_DATABASE_URI"]
+    if not uri.startswith("sqlite:///"):
+        return None
+    return uri.replace("sqlite:///", "", 1)
 
 
 @bp.route("/users")
