@@ -44,6 +44,11 @@
       <p>{{ t('admin_monitoring') }}</p>
       <a class="btn btn-secondary btn-small" href="{{ url_for('admin.monitoring') }}">{{ t('view') }}</a>
     </div>
+    <div class="card">
+      <h3>💾</h3>
+      <p>{{ t('admin_backup') }}</p>
+      <a class="btn btn-secondary btn-small" href="{{ url_for('admin.backup') }}">{{ t('download_backup') }}</a>
+    </div>
   </div>
 </div>
 {% endblock %}
