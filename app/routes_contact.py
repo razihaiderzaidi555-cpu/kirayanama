@@ -37,21 +37,40 @@ def contact(listing_id):
     )
     db.session.add(cr)
     db.session.commit()
+    try:
+        from mailer import notify_new_request
+        notify_new_request(cr)
+    except Exception:
+        pass
     return redirect(url_for("contact.request_detail", rid=cr.id))
+
+
+@bp.route("/my-requests")
+@login_required
+def my_requests():
+    """Renter's own contact requests (outgoing) — newest first."""
+    reqs = (ContactRequest.query
+            .filter_by(renter_id=current_user.id)
+            .order_by(ContactRequest.created_at.desc()).all())
+    return render_template("contact/my_requests.html", requests=reqs)
 
 
 @bp.route("/request/<int:rid>")
 @login_required
 def request_detail(rid):
+    from models import Rating
     cr = _get_request_or_403(rid)
     is_renter = current_user.id == cr.renter_id
     is_landlord = current_user.id == cr.landlord_id
+    my_rating = (Rating.query.filter_by(contact_request_id=cr.id).first()
+                 if is_renter and cr.status == "unlocked" else None)
     return render_template(
         "contact/request.html",
         cr=cr,
         listing=cr.listing,
         is_renter=is_renter,
         is_landlord=is_landlord,
+        my_rating=my_rating,
         jazzcash=get_setting("jazzcash_number"),
         easypaisa=get_setting("easypaisa_number"),
         upaisa=get_setting("upaisa_number"),
@@ -69,6 +88,11 @@ def confirm(rid):
         cr.landlord_yes_at = datetime.utcnow()
         cr.status = "awaiting_payment"
         db.session.commit()
+        try:
+            from mailer import notify_landlord_confirmed
+            notify_landlord_confirmed(cr)
+        except Exception:
+            pass
         flash("landlord_yes_ok", "ok")
     return redirect(url_for("contact.request_detail", rid=cr.id))
 
@@ -143,4 +167,38 @@ def payment(rid):
         cr.status = "in_review"
     db.session.commit()
     flash("shot_saved", "ok")
+    return redirect(url_for("contact.request_detail", rid=cr.id))
+
+
+@bp.route("/request/<int:rid>/rate", methods=["POST"])
+@login_required
+def rate_landlord(rid):
+    """Renter rates the landlord after the deal unlocks — one rating per deal."""
+    from models import Rating
+    cr = _get_request_or_403(rid)
+    if current_user.id != cr.renter_id:
+        abort(403)
+    if cr.status != "unlocked":
+        abort(400)
+    if Rating.query.filter_by(contact_request_id=cr.id).first():
+        flash("already_rated", "err")
+        return redirect(url_for("contact.request_detail", rid=cr.id))
+    try:
+        stars = int(request.form.get("stars", "0"))
+    except (TypeError, ValueError):
+        stars = 0
+    if stars < 1 or stars > 5:
+        flash("stars_invalid", "err")
+        return redirect(url_for("contact.request_detail", rid=cr.id))
+    comment = (request.form.get("comment") or "").strip()[:500] or None
+    db.session.add(Rating(
+        contact_request_id=cr.id,
+        listing_id=cr.listing_id,
+        renter_id=cr.renter_id,
+        landlord_id=cr.landlord_id,
+        stars=stars,
+        comment=comment,
+    ))
+    db.session.commit()
+    flash("rating_saved", "ok")
     return redirect(url_for("contact.request_detail", rid=cr.id))
