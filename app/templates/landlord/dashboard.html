@@ -66,6 +66,16 @@
           <td>
             <a class="btn btn-small btn-secondary" href="{{ url_for('landlord.listing_edit', listing_id=l.id) }}">{{ t('edit_listing') }}</a>
             <a class="btn btn-small" href="/listing/{{ l.id }}">{{ t('view') }}</a>
+            {% if l.is_closed %}
+            <form method="post" action="{{ url_for('landlord.listing_reopen', listing_id=l.id) }}" style="display:inline">
+              <button class="btn btn-small btn-primary" type="submit">{{ t('reopen_listing') }}</button>
+            </form>
+            <br><small class="muted">{{ t('listing_closed_note') }}</small>
+            {% else %}
+            <form method="post" action="{{ url_for('landlord.listing_close', listing_id=l.id) }}" style="display:inline" onsubmit="return confirm('{{ t('close_confirm') }}')">
+              <button class="btn btn-small" type="submit">🔒 {{ t('close_listing') }}</button>
+            </form>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}
