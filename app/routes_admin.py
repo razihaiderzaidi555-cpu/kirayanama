@@ -38,6 +38,7 @@ def dashboard():
         "in_review": ContactRequest.query.filter_by(status="in_review").count(),
         "unlocked": ContactRequest.query.filter_by(status="unlocked").count(),
         "approved_listings": Listing.query.filter_by(status="approved").count(),
+        "pending_photos": Listing.query.filter_by(photo_status="pending").count(),
         "flagged_listings": (Listing.query
                              .filter(Listing.view_count >= SUSPICIOUS_MIN_VIEWS)
                              .filter(~Listing.contact_requests
@@ -173,6 +174,39 @@ def reject_listing(lid):
     db.session.commit()
     flash(_t("rejected_msg"))
     return redirect(url_for("admin.listings"))
+
+
+@bp.route("/photos")
+@admin_required
+def photo_review():
+    """Photo review queue — listings whose photos await approval."""
+    pending = (Listing.query.filter_by(photo_status="pending")
+               .order_by(Listing.created_at.desc()).all())
+    return render_template("admin/photos.html", pending=pending)
+
+
+@bp.route("/photos/<int:lid>/approve", methods=["POST"])
+@admin_required
+def approve_photos(lid):
+    listing = Listing.query.get_or_404(lid)
+    listing.photo_status = "approved"
+    listing.photo_flag = ""
+    db.session.commit()
+    flash(_t("photo_approved_msg"))
+    return redirect(url_for("admin.photo_review"))
+
+
+@bp.route("/photos/<int:lid>/reject", methods=["POST"])
+@admin_required
+def reject_photos(lid):
+    listing = Listing.query.get_or_404(lid)
+    listing.photo_status = "rejected"
+    reason = (request.form.get("reason") or "").strip()
+    if reason:
+        listing.rejection_reason = reason
+    db.session.commit()
+    flash(_t("photo_rejected_msg"))
+    return redirect(url_for("admin.photo_review"))
 
 
 @bp.route("/payments")
