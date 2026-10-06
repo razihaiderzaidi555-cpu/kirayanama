@@ -703,16 +703,16 @@ with app.app_context():
 
     # --- trademark symbol on brand displays ---
     from translations import get_text as _gt
-    check("tm: ur app_name", _gt("app_name", "ur") == "کرایہ نامہ™")
-    check("tm: en app_name", _gt("app_name", "en") == "KirayaNama™")
+    check("tm: ur app_name plain", _gt("app_name", "ur") == "کرایہ نامہ")
+    check("tm: en app_name plain", _gt("app_name", "en") == "KirayaNama")
     r = client.get("/")
     html = r.data.decode()
     check("tm: home <title> has tm", "کرایہ نامہ™" in html)
-    check("tm: header brand has tm", "🏠 کرایہ نامہ™" in html)
+    check("tm: header brand has styled tm", '<span class="tm-mark">™</span>' in html)
     check("tm: running sentence untouched",
           "کرایہ نامہ کا اصل مقصد" in html and "کرایہ نامہ™ کا اصل مقصد" not in html)
     r = client.get("/?lang=en")
-    check("tm: en header brand", "KirayaNama™" in r.data.decode())
+    check("tm: en header brand", '<span class="tm-mark">™</span>' in r.data.decode())
     client.get("/?lang=ur")
 
     # --- visitor counter ---
