@@ -1,14 +1,11 @@
 {% extends "base.html" %}
+{% from "macros_location.html" import location_selects with context %}
 {% block title %}{{ t('browse_title') }} | {{ t('app_name') }}{% endblock %}
 {% block content %}
 <h1>{{ t('browse_title') }}</h1>
 <form method="get" class="card"><div class="pad">
   <div class="grid grid-3">
-    <div class="form-group"><label>{{ t('filter_city') }}</label>
-      <select name="city">
-        <option value="">{{ t('all') }}</option>
-        {% for c in CITIES %}<option value="{{ c }}" {{ 'selected' if filters.city==c else '' }}>{{ city_name(c) }}</option>{% endfor %}
-      </select></div>
+    {{ location_selects(filters.division, filters.district, filters.tehsil, allow_all=True) }}
     <div class="form-group"><label>{{ t('filter_type') }}</label>
       <select name="property_type">
         <option value="">{{ t('all') }}</option>
@@ -34,7 +31,7 @@
       <h3><a href="{{ url_for('public.listing_detail', listing_id=l.id) }}">{{ l.title_ur if lang=='ur' else (l.title_en or l.title_ur) }}</a></h3>
       {% if l.landlord and l.landlord.is_dealer() and l.landlord.dealer_verified %}<p><span class="badge badge-green">{{ t('dealer_badge') }}</span></p>{% endif %}
       <p class="rent">{{ t('rs') }} {{ "{:,}".format(l.monthly_rent) }} / {{ t('per_month') }}</p>
-      <p class="muted">{{ city_name(l.city) }}{% if l.area %} — {{ l.area }}{% endif %} · {{ t('type_' + l.property_type) }}</p>
+      <p class="muted">{% if l.tehsil %}{{ tehsil_name(l.tehsil) }}، {% endif %}{{ district_name(l.city) }}{% if l.area %} — {{ l.area }}{% endif %} · {{ t('type_' + l.property_type) }}</p>
     </div>
   </div>
 {% else %}
