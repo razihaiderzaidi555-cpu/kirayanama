@@ -16,7 +16,7 @@ from translations import get_text
 
 bp = Blueprint("landlord", __name__, url_prefix="/dashboard")
 
-OPEN_REQUEST_STATUSES = ["pending_yes", "awaiting_payment", "in_review"]
+OPEN_REQUEST_STATUSES = ["pending_yes", "awaiting_payment", "in_review", "needs_review"]
 LISTER_ROLES = ("landlord", "dealer", "admin")  # who may create listings
 
 
