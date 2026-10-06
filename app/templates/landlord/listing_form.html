@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros_location.html" import location_selects with context %}
 {% block title %}{{ t('add_listing') if not listing else t('edit_listing') }}{% endblock %}
 {% block content %}
 <div class="container">
@@ -23,16 +24,10 @@
         <label for="desc_en">{{ t('desc_en') }}</label>
         <textarea id="desc_en" name="desc_en" rows="4">{{ (listing.desc_en if listing else request.form.get('desc_en', '')) }}</textarea>
       </div>
-      <div class="form-group">
-        <label for="city">{{ t('city') }}</label>
-        <select id="city" name="city">
-          {% for c in cities %}
-          <option value="{{ c }}"
-            {% if (listing and listing.city == c) or (not listing and request.form.get('city') == c) %}selected{% endif %}>
-            {{ city_name(c) }}</option>
-          {% endfor %}
-        </select>
-      </div>
+      {% set fdiv = listing.division if listing else request.form.get('division', '') %}
+      {% set fdist = listing.city if listing else request.form.get('district', '') %}
+      {% set fteh = listing.tehsil if listing else request.form.get('tehsil', '') %}
+      {{ location_selects(fdiv, fdist, fteh) }}
       <div class="form-group">
         <label for="area">{{ t('area') }}</label>
         <input id="area" name="area" type="text"
