@@ -1,8 +1,9 @@
 """W3 — contact / dual-lock escrow flow."""
 import os
+import re
 
 from models import db, User, Listing, ContactRequest, UsedTrx, get_setting
-from utils import save_upload
+from utils import save_upload, normalize_digits
 from payment_guard import verify_payment_screenshot, unlock_request
 from translations import get_text
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort, g
@@ -156,6 +157,18 @@ def payment(rid):
         abort(403)
     if cr.status not in ("awaiting_payment", "needs_review"):
         abort(400)
+    # --- typed Transaction ID: required, 8-20 digits, globally unique ---
+    side = "renter" if is_renter else "landlord"
+    tid = normalize_digits((request.form.get("tid") or "").strip())
+    if not re.fullmatch(r"\d{8,20}", tid):
+        flash(T("tid_invalid"), "err")
+        return redirect(url_for("contact.request_detail", rid=cr.id))
+    claimed = UsedTrx.query.get(tid)
+    if claimed is not None and not (claimed.contact_request_id == cr.id and
+                                    claimed.side == side):
+        # Same TID already paid for another deal/side -> replay attempt.
+        flash(T("tid_reused"), "err")
+        return redirect(url_for("contact.request_detail", rid=cr.id))
     file = request.files.get("screenshot")
     if not file or not file.filename:
         flash("shot_no_file", "err")
@@ -166,23 +179,21 @@ def payment(rid):
         flash("shot_bad_file", "err")
         return redirect(url_for("contact.request_detail", rid=cr.id))
     # --- automatic payment verification (fail-open: any crash -> review) ---
+    # OCR checks amount + identifier; the TYPED tid takes precedence over any
+    # OCR-extracted TrxID for the uniqueness claim.
     identifiers = [get_setting(k) for k in
                    ("jazzcash_number", "easypaisa_number", "upaisa_number",
                     "hbl_account")]
     img_path = os.path.join(current_app.config["UPLOAD_FOLDER"], "payments", name)
     try:
-        ok, trx_id, reason = verify_payment_screenshot(
-            img_path, cr.commission, identifiers)
+        ok, ocr_trx, reason = verify_payment_screenshot(
+            img_path, cr.commission, identifiers, require_trx_id=False)
     except Exception:  # noqa: BLE001 - guard must never break uploads
-        ok, trx_id, reason = False, None, "ocr_error"
-    side = "renter" if is_renter else "landlord"
-    claimed = UsedTrx.query.get(trx_id) if (ok and trx_id) else None
-    if ok and trx_id and (claimed is None or
-                          (claimed.contact_request_id == cr.id and
-                           claimed.side == side)):
-        # Fresh transaction (or this side's own re-upload): auto-approve.
+        ok, ocr_trx, reason = False, None, "ocr_error"
+    if ok:
+        # Fresh (or this side's own re-upload): claim the typed TID.
         if claimed is None:
-            db.session.add(UsedTrx(trx_id=trx_id, contact_request_id=cr.id,
+            db.session.add(UsedTrx(trx_id=tid, contact_request_id=cr.id,
                                    side=side))
         if is_renter:
             cr.renter_verified = True
@@ -192,9 +203,6 @@ def payment(rid):
             cr.landlord_review_reason = ""
         flash(T("shot_auto_verified"), "ok")
     else:
-        # Same TrxID claimed before -> replay fraud attempt.
-        if ok and trx_id:
-            reason = "trx_reused"
         if is_renter:
             cr.renter_verified = False
             cr.renter_review_reason = reason or "ocr_error"
