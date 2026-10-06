@@ -82,19 +82,39 @@ def _save_photos(listing, make_first_primary):
     return saved
 
 
-def _apply_photo_guard(listing, new_paths):
-    """OCR-scan newly uploaded photos; flag the listing if a phone number is
-    found in any photo. Never raises — uploads must not break."""
+def _apply_photo_checks(listing, new_paths):
+    """Automatic photo moderation: person detection + OCR phone scan.
+
+    - Person visible in any new photo -> photo auto-REJECTED with an Urdu
+      reason for the landlord; listing stays hidden until a clean photo is
+      uploaded. No admin action needed.
+    - Phone-like text in a photo -> flagged 'pending' for admin review
+      (background queue, /admin/photos).
+    - Clean -> auto 'approved'. No admin action needed.
+    Never raises — uploads must not break.
+    """
     if not new_paths:
         return
     try:
-        from photo_guard import scan_photo_paths
-        hit = scan_photo_paths(new_paths)
+        from person_guard import scan_photo_paths as _person_scan
+        if _person_scan(new_paths):
+            listing.photo_status = "rejected"
+            listing.photo_flag = "person_detected"
+            listing.rejection_reason = T("rejection_person_reason")
+            return
     except Exception:  # noqa: BLE001 - guard must never break the flow
-        return
+        pass
+    try:
+        from photo_guard import scan_photo_paths as _ocr_scan
+        hit = _ocr_scan(new_paths)
+    except Exception:  # noqa: BLE001
+        hit = None
     if hit:
         listing.photo_status = "pending"
         listing.photo_flag = "phone_detected"
+    else:
+        listing.photo_status = "approved"
+        listing.photo_flag = ""
 
 
 def _read_listing_form():
@@ -201,9 +221,11 @@ def listing_new():
         else:
             listing = Listing(landlord_id=current_user.id, status="pending", **data)
             new_paths = _save_photos(listing, make_first_primary=True)
-            _apply_photo_guard(listing, new_paths)
+            _apply_photo_checks(listing, new_paths)
             if _apply_phone_scan(listing, data):
                 flash(T("listing_rejected_phone"))
+            elif listing.photo_flag == "person_detected":
+                flash(T("rejection_person_reason"))
             else:
                 flash(T("listing_saved"))
             db.session.add(listing)
@@ -235,14 +257,13 @@ def listing_edit(listing_id):
             for k, v in data.items():
                 setattr(listing, k, v)
             new_paths = _save_photos(listing, make_first_primary=not listing.photos)
-            if new_paths:
-                # new photos -> back to the photo review queue
-                listing.photo_status = "pending"
-                listing.photo_flag = ""
-            _apply_photo_guard(listing, new_paths)
+            # new photos -> automatic photo checks decide the final status
+            _apply_photo_checks(listing, new_paths)
             if _apply_phone_scan(listing, data):
                 # A number snuck in via edit -> kill the listing, needs re-review.
                 flash(T("listing_rejected_phone"))
+            elif listing.photo_flag == "person_detected":
+                flash(T("rejection_person_reason"))
             else:
                 flash(T("edit_saved"))
             db.session.commit()
