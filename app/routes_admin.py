@@ -5,7 +5,7 @@ import os
 
 from models import (db, User, Listing, ContactRequest, Setting, get_setting,
                     SUSPICIOUS_MIN_VIEWS, SUSPICIOUS_MIN_CANCELLATIONS,
-                    Draw, TokenLedger, token_balance, visit_stats)
+                    Draw, TokenLedger, token_balance, visit_stats, VisitStat)
 from routes_lucky import run_weighted_draw
 from payment_guard import unlock_request
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, g, send_file, current_app
@@ -335,3 +335,14 @@ def settings():
         hbl_account=get_setting("hbl_account"),
         alert_token=get_setting("alert_token"),
     )
+
+
+@bp.route("/visitors/reset", methods=["POST"])
+@login_required
+def visitors_reset():
+    if not getattr(current_user, "is_admin", False):
+        abort(403)
+    VisitStat.query.delete()
+    db.session.commit()
+    flash(_t("visitors_reset_done"))
+    return redirect(url_for("admin.dashboard"))
