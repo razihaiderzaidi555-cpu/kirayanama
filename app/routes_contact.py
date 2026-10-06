@@ -19,7 +19,7 @@ def _get_request_or_403(rid):
 @login_required
 def contact(listing_id):
     listing = Listing.query.get_or_404(listing_id)
-    if listing.status != "approved":
+    if listing.status != "approved" or listing.photo_status != "approved":
         abort(404)
     if listing.landlord_id == current_user.id:
         abort(400)
