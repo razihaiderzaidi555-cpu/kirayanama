@@ -100,7 +100,7 @@ with app.app_context():
     check("listing division saved", listing.division == "faisalabad")
     check("listing district saved", listing.city == "chiniot")
     check("listing tehsil saved", listing.tehsil == "chiniot")
-    listing.status = "approved"; db.session.commit()
+    listing.status = "approved"; listing.photo_status = "approved"; db.session.commit()
 
     # legacy city-only listing post still works
     buf2 = io.BytesIO(); img.save(buf2, "PNG"); buf2.seek(0)
@@ -114,7 +114,7 @@ with app.app_context():
     check("legacy listing division", legacy.division == "faisalabad")
     check("legacy listing district", legacy.city == "chiniot")
     check("legacy listing tehsil", legacy.tehsil == "lalian")
-    legacy.status = "approved"; db.session.commit()
+    legacy.status = "approved"; legacy.photo_status = "approved"; db.session.commit()
 
     # --- renter contacts -> my-requests shows it ---
     client.get("/logout")
@@ -223,6 +223,97 @@ with app.app_context():
     from mailer import send_email, is_configured
     check("mailer unconfigured in dev", is_configured() is False)
     check("send_email False not crash", send_email("x@y.com", "s", "b") is False)
+
+    # --- photo review queue ---
+    check("listings.photo_status column", "photo_status" in cols_list)
+    check("listings.photo_flag column", "photo_flag" in cols_list)
+    client.get("/logout")
+    client.post("/login", data={"phone": "03000000002", "password": "ll123456"})
+    img3 = Image.new("RGB", (100, 100), "blue")
+    buf3 = io.BytesIO(); img3.save(buf3, "PNG"); buf3.seek(0)
+    r = client.post("/dashboard/listings/new", data={
+        "title_ur": "فوٹو ٹیسٹ", "monthly_rent": "15000",
+        "division": "faisalabad", "district": "chiniot", "tehsil": "chiniot",
+        "property_type": "house", "photos": (buf3, "p3.png")},
+        content_type="multipart/form-data", follow_redirects=True)
+    pl = Listing.query.filter_by(title_ur="فوٹو ٹیسٹ").first()
+    check("new listing photo_status pending", pl is not None and pl.photo_status == "pending")
+    check("photo-pending hidden from public", client.get(f"/listing/{pl.id}").status_code == 404)
+    check("photo-pending not in browse", "فوٹو ٹیسٹ" not in client.get("/listings").data.decode())
+    check("photo-pending contact blocked", client.post(f"/contact/{pl.id}").status_code in (302, 404))
+
+    # admin photo review queue: approve flow
+    client.get("/logout")
+    client.post("/login", data={"phone": "03000000001", "password": "admin123"})
+    r = client.get("/admin/photos")
+    check("photo review page 200", r.status_code == 200)
+    check("photo review lists pending", "فوٹو ٹیسٹ" in r.data.decode())
+    r = client.post(f"/admin/photos/{pl.id}/approve", follow_redirects=True)
+    check("photo approve sets approved", Listing.query.get(pl.id).photo_status == "approved")
+    check("photo approve clears flag", Listing.query.get(pl.id).photo_flag == "")
+    check("still hidden: listing status pending",
+          client.get(f"/listing/{pl.id}").status_code == 404)
+    pl.status = "approved"; db.session.commit()
+    check("visible after both approvals", client.get(f"/listing/{pl.id}").status_code == 200)
+
+    # admin photo review queue: reject with reason
+    buf4 = io.BytesIO(); img3.save(buf4, "PNG"); buf4.seek(0)
+    client.get("/logout")
+    client.post("/login", data={"phone": "03000000002", "password": "ll123456"})
+    client.post("/dashboard/listings/new", data={
+        "title_ur": "مسترد ٹیسٹ", "monthly_rent": "15000",
+        "division": "faisalabad", "district": "chiniot", "tehsil": "chiniot",
+        "property_type": "house", "photos": (buf4, "p4.png")},
+        content_type="multipart/form-data", follow_redirects=True)
+    rl = Listing.query.filter_by(title_ur="مسترد ٹیسٹ").first()
+    client.get("/logout")
+    client.post("/login", data={"phone": "03000000001", "password": "admin123"})
+    r = client.post(f"/admin/photos/{rl.id}/reject", data={"reason": "tasveer mein number"},
+                    follow_redirects=True)
+    rl2 = Listing.query.get(rl.id)
+    check("photo reject status", rl2.photo_status == "rejected")
+    check("photo reject reason saved", rl2.rejection_reason == "tasveer mein number")
+
+    # migration backfill: NULL photo_status -> approved
+    from sqlalchemy import text as _satext
+    db.session.execute(_satext("UPDATE listings SET photo_status=NULL WHERE id=:i"), {"i": pl.id})
+    db.session.commit()
+    from app import _migrate_schema
+    _migrate_schema()
+    check("migration backfills NULL -> approved",
+          Listing.query.get(pl.id).photo_status == "approved")
+    _migrate_schema()  # idempotent: second run changes nothing
+    check("migration idempotent", Listing.query.get(pl.id).photo_status == "approved")
+
+    # --- photo_guard unit tests ---
+    import photo_guard
+    from unittest import mock
+    check("guard: plain text no match",
+          photo_guard.find_phone_in_text("khoobsurat ghar karaye par") is None)
+    check("guard: detects 03 number",
+          photo_guard.find_phone_in_text("call 0301-2345678 now") == "0301-2345678")
+    check("guard: detects +92",
+          photo_guard.find_phone_in_text("rabta +923001234567") == "+923001234567")
+    check("guard: detects PTCL shape",
+          photo_guard.find_phone_in_text("041-8712345") == "041-8712345")
+    check("guard: urdu digits",
+          photo_guard.find_phone_in_text("۰۳۰۱۲۳۴۵۶۷۸") == "03012345678")
+    check("guard: house number not matched",
+          photo_guard.find_phone_in_text("makan number 123 gali 4") is None)
+    with mock.patch("photo_guard.tesseract_available", return_value=False):
+        check("guard: no tesseract -> None, no crash",
+              photo_guard.find_phone_in_image("/tmp/does-not-exist.png") is None)
+    with mock.patch("photo_guard.ocr_image_text", return_value="rabta 0321-7654321"):
+        check("guard: mocked OCR hit",
+              photo_guard.find_phone_in_image("/tmp/x.png") == "0321-7654321")
+    with mock.patch("photo_guard.ocr_image_text", return_value="koi number nahi"):
+        check("guard: mocked OCR no hit",
+              photo_guard.find_phone_in_image("/tmp/x.png") is None)
+    with mock.patch("photo_guard.ocr_image_text", side_effect=RuntimeError("boom")):
+        check("guard: OCR crash -> None, no raise",
+              photo_guard.find_phone_in_image("/tmp/x.png") is None)
+    check("guard: scan skips missing files",
+          photo_guard.scan_photo_paths(["/tmp/nope1.png", "/tmp/nope2.png"]) is None)
 
 print(f"\n==== {len(passed)} passed, {len(failed)} failed ====")
 if failed:
