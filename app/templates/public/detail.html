@@ -4,7 +4,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="{{ t('app_name') }}">
 <meta property="og:title" content="{{ listing.title_ur if lang=='ur' else (listing.title_en or listing.title_ur) }} — {{ t('rs') }} {{ '{:,}'.format(listing.monthly_rent or 0) }}/{{ t('per_month') }}">
-<meta property="og:description" content="{{ city_name(listing.city) }}{% if listing.area %}، {{ listing.area }}{% endif %} — {{ t('app_name') }}">
+<meta property="og:description" content="{% if listing.tehsil %}{{ tehsil_name(listing.tehsil) }}، {% endif %}{{ district_name(listing.city) }}{% if listing.area %}، {{ listing.area }}{% endif %} — {{ t('app_name') }}">
 <meta property="og:url" content="{{ request.url }}">
 {% if listing.primary_photo %}<meta property="og:image" content="{{ request.host_url.rstrip('/') }}{{ url_for('static', filename='uploads/listings/' + listing.primary_photo.filename) }}">{% endif %}
 {% endblock %}
@@ -25,7 +25,7 @@
 {% endif %}
 <p class="rent" style="font-size:1.4em">{{ t('rs') }} {{ "{:,}".format(listing.monthly_rent) }} / {{ t('per_month') }}</p>
 <div class="specs">
-  <span>📍 {{ city_name(listing.city) }}</span>
+  <span>📍 {% if listing.tehsil %}{{ tehsil_name(listing.tehsil) }}، {% endif %}{{ district_name(listing.city) }}</span>
   {% if listing.area %}<span>{{ t('area') }}: {{ listing.area }}</span>{% endif %}
   <span>{{ t('type_' + listing.property_type) }}</span>
   {% if listing.bedrooms %}<span>{{ t('bedrooms') }}: {{ listing.bedrooms }}</span>{% endif %}
