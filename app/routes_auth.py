@@ -4,6 +4,7 @@ from flask_login import login_user, logout_user, current_user, login_required
 
 from models import (db, User, next_public_id, CITIES, award_tokens,
                     award_referral_tokens, ensure_referral_code, TOKEN_SIGNUP_BONUS)
+from punjab_divisions import resolve_location, is_valid_location
 from translations import get_text
 
 bp = Blueprint("auth", __name__)
@@ -36,11 +37,20 @@ def register():
         email = (request.form.get("email") or "").strip().lower() or None
         password = request.form.get("password") or ""
         role = request.form.get("role") or "renter"
-        city = request.form.get("city") or ""
+        division = request.form.get("division") or ""
+        district = request.form.get("district") or ""
+        tehsil = request.form.get("tehsil") or ""
+        city = request.form.get("city") or ""  # legacy flat slug
         if role not in ("landlord", "renter"):
             role = "renter"  # public signup: only renter/landlord (dealer via admin)
-        if city not in CITIES:
-            city = ""
+        if is_valid_location(division, district, tehsil):
+            user_city, user_division, user_district = tehsil, division, district
+        elif city:
+            # Back-compat: old clients post only `city`.
+            rdiv, rdist, rteh = resolve_location(city=city)
+            user_city, user_division, user_district = rteh or rdist, rdiv, rdist
+        else:
+            user_city, user_division, user_district = "", "", ""
         if not name:
             flash(T("name_req"))
         elif not phone:
@@ -53,7 +63,8 @@ def register():
             flash(T("email_taken"))
         else:
             user = User(public_id=next_public_id(), name=name,
-                        phone=phone, email=email, role=role, city=city)
+                        phone=phone, email=email, role=role, city=user_city,
+                        division=user_division, district=user_district)
             user.set_password(password)
             db.session.add(user)
             db.session.flush()  # get user.id before referral handling
@@ -73,7 +84,9 @@ def register():
             flash("%s, %s! %s: %s" % (T("welcome"), user.name, T("your_id"), user.public_id))
             return redirect(_home_for(user))
     ref_name = session.get("ref_name") if request.method == "GET" else None
-    return render_template("auth/register.html", cities=CITIES, ref_name=ref_name)
+    from punjab_divisions import DIVISIONS
+    return render_template("auth/register.html", cities=CITIES, ref_name=ref_name,
+                           divisions=DIVISIONS)
 
 
 @bp.route("/login", methods=["GET", "POST"])
