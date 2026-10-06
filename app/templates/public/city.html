@@ -2,8 +2,16 @@
 {% block title %}{% if lang == 'ur' %}{{ place_name(city_slug) }} میں کرائے کے مکانات{% else %}Houses for rent in {{ place_name(city_slug, 'en') }}{% endif %} | {{ t('app_name') }}{% endblock %}
 {% block extra_head %}
 <meta name="description" content="{% if lang == 'ur' %}{{ place_name(city_slug) }} میں کرائے کے مکانات{% else %}Houses for rent in {{ place_name(city_slug, 'en') }}{% endif %} — {{ t('seo_home_desc') }}">
+<style>
+.district-page-bg{position:relative;border-radius:14px;overflow:hidden;
+  background:url("{{ url_for('static', filename=district_image(city_slug)) }}") center/cover no-repeat}
+.district-page-bg::before{content:"";position:absolute;inset:0;background:rgba(255,255,255,.87);pointer-events:none}
+.district-page-bg>.pad{position:relative;z-index:1}
+@media(max-width:640px){.district-page-bg::before{background:rgba(255,255,255,.91)}}
+</style>
 {% endblock %}
 {% block content %}
+<div class="district-page-bg"><div class="pad">
 <h1>📍 {% if lang == 'ur' %}{{ place_name(city_slug) }} میں کرائے کے مکانات{% else %}Houses for rent in {{ place_name(city_slug, 'en') }}{% endif %}</h1>
 {% if tehsils %}
 <h2 class="section-title">{{ t('filter_tehsil') }}</h2>
@@ -29,4 +37,5 @@
   <p class="muted">{{ t('no_results') }}</p>
 {% endfor %}
 </div>
+</div></div>
 {% endblock %}
