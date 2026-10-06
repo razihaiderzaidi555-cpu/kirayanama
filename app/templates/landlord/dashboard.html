@@ -51,7 +51,7 @@
         {% for l in listings %}
         <tr>
           <td>{{ l.title_ur if lang == 'ur' else (l.title_en or l.title_ur) }}</td>
-          <td>{{ city_name(l.city) }}</td>
+          <td>{% if l.tehsil %}{{ tehsil_name(l.tehsil) }}، {% endif %}{{ district_name(l.city) }}</td>
           <td>{{ t('rs') }} {{ l.monthly_rent }} {{ t('per_month') }}</td>
           <td>
             {% if l.status == 'approved' %}
