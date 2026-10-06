@@ -117,10 +117,21 @@ def _migrate_schema():
         stmts.append("ALTER TABLE users ADD COLUMN division VARCHAR(40)")
     if "district" not in ucols:
         stmts.append("ALTER TABLE users ADD COLUMN district VARCHAR(40)")
+    # photo review queue (2026-10-06 anti-fraud): nullable so old rows stay
+    # NULL and can be backfilled to 'approved' below. New rows get 'pending'
+    # from the model default, so this UPDATE only ever touches pre-migration
+    # rows and is safe to run on every boot.
+    if "photo_status" not in cols:
+        stmts.append("ALTER TABLE listings ADD COLUMN photo_status VARCHAR(20)")
+    if "photo_flag" not in cols:
+        stmts.append("ALTER TABLE listings ADD COLUMN photo_flag VARCHAR(40)")
     if stmts:
         with db.engine.begin() as conn:
             for s in stmts:
                 conn.execute(text(s))
+    with db.engine.begin() as conn:
+        conn.execute(text("UPDATE listings SET photo_status='approved' "
+                          "WHERE photo_status IS NULL"))
 
 
 def _migrate_locations():
