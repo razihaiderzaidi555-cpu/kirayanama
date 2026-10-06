@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{{ t('admin_luckydraw') }} — {{ t('admin_title') }}{% endblock %}
+{% block content %}
+<div class="container">
+  <h1>🎡 {{ t('admin_luckydraw') }}</h1>
+
+  <div class="card"><div class="pad">
+    <h3>{{ t('draw_run') }}</h3>
+    <p class="muted">{{ t('draw_run_hint') }}</p>
+    <form method="post" action="{{ url_for('admin.luckydraw_run') }}">
+      <div class="form-group">
+        <label for="dtitle">{{ t('draw_title_label') }}</label>
+        <input id="dtitle" name="title" type="text" placeholder="{{ t('draw_default_title') }}">
+      </div>
+      <button class="btn btn-gold" type="submit">🎡 {{ t('draw_run') }}</button>
+    </form>
+  </div></div>
+
+  <h2 class="section-title">{{ t('draw_holders') }}</h2>
+  {% if holders %}
+  <div class="card"><div class="pad">
+    <table>
+      <thead><tr><th>{{ t('col_id') }}</th><th>{{ t('name') }}</th><th>{{ t('phone') }}</th><th>🪙 {{ t('tokens_label') }}</th></tr></thead>
+      <tbody>
+      {% for u, bal in holders %}
+        <tr><td>{{ u.public_id }}</td><td>{{ u.name }}</td><td>{{ u.phone }}</td><td><strong>{{ bal }}</strong></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div></div>
+  {% else %}
+  <p class="muted">{{ t('draw_no_players') }}</p>
+  {% endif %}
+
+  <h2 class="section-title">{{ t('draw_past') }}</h2>
+  {% if draws %}
+  <div class="card"><div class="pad">
+    <table>
+      <thead><tr><th>{{ t('draw_title_label') }}</th><th>{{ t('draw_winner_of') }}</th><th>{{ t('draw_prize') }}</th><th>{{ t('status') }}</th><th>{{ t('created') }}</th></tr></thead>
+      <tbody>
+      {% for d in draws %}
+        <tr>
+          <td>{{ d.title }}</td>
+          <td>{% if d.winner %}🏆 {{ d.winner.name }} ({{ d.winner.public_id }}){% else %}—{% endif %}</td>
+          <td><span class="badge badge-yellow">{{ t(d.prize) }}</span></td>
+          <td>{{ d.status }}</td>
+          <td>{{ d.drawn_at.strftime('%Y-%m-%d') if d.drawn_at else '' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div></div>
+  {% else %}
+  <p class="muted">{{ t('draw_no_winners') }}</p>
+  {% endif %}
+
+  <p><a class="btn btn-secondary btn-small" href="{{ url_for('admin.dashboard') }}">{{ t('back') }}</a></p>
+</div>
+{% endblock %}
