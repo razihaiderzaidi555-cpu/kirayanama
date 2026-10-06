@@ -89,7 +89,7 @@ with app.app_context():
     assert cr.status == "awaiting_payment" and cr.commission == 3000, "commission 15% of 20000"
 print("5 OK: landlord YES -> awaiting_payment, commission=3000")
 
-# 6. both upload screenshots -> in_review
+# 6. both upload blank screenshots -> needs_review (OCR can't auto-verify blanks)
 r = c.post(f"/request/{rid}/payment", data={"screenshot": (png(), "pay.png")},
            content_type="multipart/form-data", follow_redirects=True)
 assert r.status_code == 200
@@ -102,8 +102,8 @@ r = c.post(f"/request/{rid}/payment", data={"screenshot": (png(), "pay2.png")},
 assert r.status_code == 200
 with app.app_context():
     cr = ContactRequest.query.get(rid)
-    assert cr.status == "in_review" and cr.renter_shot, "in_review"
-print("6 OK: both screenshots -> in_review")
+    assert cr.status == "needs_review" and cr.renter_shot, "needs_review"
+print("6 OK: both screenshots -> needs_review (blank shots fail OCR, fail-open)")
 
 # 7. admin verify -> unlocked, phone visible to renter only
 c.get("/logout")
