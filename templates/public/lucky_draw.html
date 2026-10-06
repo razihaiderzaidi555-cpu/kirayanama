@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}{{ t('nav_luckydraw') }} — {{ t('app_name') }}{% endblock %}
+{% block content %}
+<div class="hero-full draw-hero">
+  <h1>{{ t('draw_hero_title') }}</h1>
+  <div class="hero-divider"></div>
+  <p>{{ t('draw_hero_sub') }}</p>
+  <p class="draw-free-pill">🪙 {{ t('draw_free_note') }}</p>
+</div>
+
+<h2 class="section-title">{{ t('draw_how_title') }}</h2>
+<div class="grid grid-3">
+  <div class="card how-card"><div class="pad"><span class="how-num">1</span><h3>{{ t('draw_step1t') }}</h3><p class="muted">{{ t('draw_step1d') }}</p></div></div>
+  <div class="card how-card"><div class="pad"><span class="how-num">2</span><h3>{{ t('draw_step2t') }}</h3><p class="muted">{{ t('draw_step2d') }}</p></div></div>
+  <div class="card how-card"><div class="pad"><span class="how-num">3</span><h3>{{ t('draw_step3t') }}</h3><p class="muted">{{ t('draw_step3d') }}</p></div></div>
+</div>
+
+<div class="grid">
+  <div class="card draw-wheel-card">
+    <div class="pad" style="text-align:center">
+      <h3>🎡 {{ t('nav_luckydraw') }}</h3>
+      <div class="wheel-wrap">
+        <canvas id="drawWheel" width="300" height="300"></canvas>
+        <div class="wheel-pointer">▼</div>
+      </div>
+      {% if current_user.is_authenticated %}
+      <p class="spin-stats">🪙 {{ t('draw_total_spins') }}: <strong id="totalSpins">{{ spins_total }}</strong>
+        &nbsp;•&nbsp; {{ t('draw_spins_left_today') }}: <strong id="spinsLeft">{{ spins_left_today }}</strong></p>
+      {% if current_user.role == 'renter' %}
+      <p class="muted">🎁 {{ t('draw_rent_progress') }}: <strong id="spinsToRent">{{ [rent_spins_goal - spins_total, 0] | max }}</strong></p>
+      {% else %}
+      <p class="muted"><small>{{ t('draw_rent_only_renters') }}</small></p>
+      {% endif %}
+      <p><button class="btn btn-gold" id="spinBtn" type="button" {% if spins_left_today <= 0 %}disabled{% endif %}>{{ t('draw_spin_btn') }}</button></p>
+      {% else %}
+      <p><a class="btn btn-gold" href="{{ url_for('auth.login') }}">{{ t('draw_login_to_spin') }}</a></p>
+      {% endif %}
+      <p class="muted" id="spinResult"></p>
+      <p class="muted"><small>{{ t('draw_spin_note') }}</small></p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="pad">
+      <h3>{{ t('draw_stats') }}</h3>
+      <p>👥 {{ t('draw_participants') }}: <strong>{{ participants }}</strong></p>
+      <p>🪙 {{ t('draw_total_tokens') }}: <strong>{{ total_tokens }}</strong></p>
+      {% if current_user.is_authenticated %}
+      <hr>
+      <h3>🪙 {{ t('draw_your_tokens') }}: <span class="gold-num">{{ balance }}</span></h3>
+      <p><strong>{{ t('draw_your_link') }}:</strong></p>
+      <p class="ref-link-box"><code id="refLink">{{ ref_link }}</code></p>
+      <p>
+        <button class="btn btn-small btn-primary" type="button" onclick="copyRef()">{{ t('draw_copy') }}</button>
+        <span class="muted" id="copyMsg"></span>
+      </p>
+      <p><strong>{{ t('draw_share') }}:</strong></p>
+      <p class="share-row">
+        <a class="btn btn-small btn-secondary" target="_blank" rel="noopener"
+           href="https://www.facebook.com/sharer/sharer.php?u={{ ref_link|urlencode }}">📘 {{ t('draw_share_fb') }}</a>
+        <a class="btn btn-small btn-secondary" target="_blank" rel="noopener"
+           href="https://wa.me/?text={{ (t('draw_hero_sub') ~ ' ' ~ ref_link)|urlencode }}">💬 {{ t('draw_share_wa') }}</a>
+        <button class="btn btn-small btn-secondary" type="button" onclick="copyRef()">{{ t('draw_copy_tiktok') }}</button>
+      </p>
+      {% else %}
+      <p class="muted">{{ t('draw_login_hint') }}</p>
+      <p><a class="btn btn-primary" href="{{ url_for('auth.login') }}">{{ t('nav_login') }}</a></p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<h2 class="section-title">{{ t('draw_winners') }}</h2>
+{% if winners %}
+<div class="card"><div class="pad">
+  <table>
+    <thead><tr><th>{{ t('draw_winner_of') }}</th><th>{{ t('city') }}</th><th>{{ t('draw_prize') }}</th><th>{{ t('created') }}</th></tr></thead>
+    <tbody>
+    {% for d in winners %}
+      <tr>
+        <td>🏆 <strong>{{ d.winner.name if d.winner else '—' }}</strong><br><small class="muted">{{ d.title }}</small></td>
+        <td>{{ place_name(d.winner.city) if d.winner and d.winner.city else '—' }}</td>
+        <td><span class="badge badge-yellow">{{ t(d.prize) }}</span></td>
+        <td>{{ d.drawn_at.strftime('%Y-%m-%d') if d.drawn_at else '' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% else %}
+<p class="muted">{{ t('draw_no_winners') }}</p>
+{% endif %}
+
+<script>
+(function(){
+  var canvas = document.getElementById('drawWheel');
+  if(!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var labels = ['5 🪙','10 🪙','20 🪙','{{ t("prize_1month") }}','5 🪙','10 🪙','50 🪙','{{ t("prize_1month") }}'];
+  var colors = ['#0a5c38','#c9a227','#063a24','#f3e2a0','#0d6b42','#9c7c14','#042a1a','#e9d77b'];
+  var n = labels.length, arc = Math.PI*2/n, angle = 0, spinning = false;
+
+  function drawWheel(){
+    ctx.clearRect(0,0,300,300);
+    for(var i=0;i<n;i++){
+      var a0 = angle + i*arc, a1 = a0 + arc;
+      ctx.beginPath(); ctx.moveTo(150,150); ctx.arc(150,150,145,a0,a1); ctx.closePath();
+      ctx.fillStyle = colors[i % colors.length]; ctx.fill();
+      ctx.strokeStyle = '#f3e2a0'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.save(); ctx.translate(150,150); ctx.rotate(a0 + arc/2);
+      ctx.textAlign = 'right'; ctx.fillStyle = (i%2 ? '#20301f' : '#fff');
+      ctx.font = 'bold 14px sans-serif';
+      ctx.fillText(labels[i], 135, 5); ctx.restore();
+    }
+    ctx.beginPath(); ctx.arc(150,150,26,0,Math.PI*2);
+    ctx.fillStyle = '#c9a227'; ctx.fill();
+    ctx.strokeStyle = '#063a24'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = '#063a24'; ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center'; ctx.fillText('KN', 150, 156);
+  }
+  drawWheel();
+
+  var spinBtn = document.getElementById('spinBtn');
+  if(spinBtn){
+    spinBtn.addEventListener('click', function(){
+      if(spinning) return; spinning = true;
+      var btn = this; btn.disabled = true;
+      document.getElementById('spinResult').textContent = '';
+      fetch('{{ url_for("lucky.spin") }}', {method: 'POST'})
+        .then(function(r){ return r.json().then(function(j){ return {status: r.status, body: j}; }); })
+        .then(function(res){
+          var j = res.body;
+          if(!j.ok){
+            spinning = false; btn.disabled = false;
+            document.getElementById('spinResult').textContent = '⛔ ' + (j.message || '');
+            return;
+          }
+          // Server chose segment j.segment — rotate so the TOP pointer
+          // lands on its middle: (3π/2 - angle) mod 2π = (seg+0.5)*arc.
+          var segArc = Math.PI*2/n;
+          var relTarget = (j.segment + 0.5) * segArc;
+          var cur = (((Math.PI*1.5 - angle) % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+          var delta = (((cur - relTarget) % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+          var total = Math.PI*2*5 + delta; // 5 full turns, then land
+          var start = null, dur = 4200, from = angle;
+          function frame(ts){
+            if(!start) start = ts;
+            var p = Math.min((ts-start)/dur, 1);
+            var eased = 1 - Math.pow(1-p, 3);
+            angle = from + total*eased;
+            drawWheel();
+            if(p < 1){ requestAnimationFrame(frame); }
+            else {
+              spinning = false;
+              var msg = j.won_rent ? '{{ t("draw_won_rent") }}' : ('🎉 ' + labels[j.segment]);
+              document.getElementById('spinResult').textContent = msg;
+              document.getElementById('totalSpins').textContent = j.total_spins;
+              document.getElementById('spinsLeft').textContent = j.spins_left_today;
+              var el = document.getElementById('spinsToRent');
+              if(el) el.textContent = j.spins_to_rent;
+              btn.disabled = (j.spins_left_today <= 0);
+            }
+          }
+          requestAnimationFrame(frame);
+        })
+        .catch(function(){ spinning = false; btn.disabled = false; });
+    });
+  }
+})();
+
+function copyRef(){
+  var el = document.getElementById('refLink');
+  var done = function(){
+    var m = document.getElementById('copyMsg');
+    if(m) m.textContent = '{{ t("draw_copied") }}';
+  };
+  if(navigator.clipboard && el){ navigator.clipboard.writeText(el.textContent.trim()).then(done); }
+  else if(el){
+    var r = document.createRange(); r.selectNode(el);
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    try{ document.execCommand('copy'); }catch(e){}
+    s.removeAllRanges(); done();
+  }
+}
+</script>
+{% endblock %}
