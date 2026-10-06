@@ -5,6 +5,14 @@
 {% endblock %}
 {% block content %}
 <h1>📍 {{ place_name(city_slug) }} میں کرائے کے مکانات</h1>
+{% if tehsils %}
+<h2 class="section-title">{{ t('filter_tehsil') }}</h2>
+<div class="chips chips-big">
+  {% for teh in tehsils %}
+  <a class="chip{% if teh[0] == city_slug %} chip-active{% endif %}" href="{{ url_for('public.city_page', city=teh[0]) }}">{{ tehsil_name(teh[0]) }}</a>
+  {% endfor %}
+</div>
+{% endif %}
 <div class="grid grid-3">
 {% for l in listings %}
   {% set ph = l.primary_photo %}
