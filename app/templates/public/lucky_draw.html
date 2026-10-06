@@ -79,7 +79,7 @@
     {% for d in winners %}
       <tr>
         <td>🏆 <strong>{{ d.winner.name if d.winner else '—' }}</strong><br><small class="muted">{{ d.title }}</small></td>
-        <td>{{ city_name(d.winner.city) if d.winner and d.winner.city else '—' }}</td>
+        <td>{{ place_name(d.winner.city) if d.winner and d.winner.city else '—' }}</td>
         <td><span class="badge badge-yellow">{{ t(d.prize) }}</span></td>
         <td>{{ d.drawn_at.strftime('%Y-%m-%d') if d.drawn_at else '' }}</td>
       </tr>
