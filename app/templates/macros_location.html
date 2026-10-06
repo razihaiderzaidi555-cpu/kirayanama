@@ -50,7 +50,8 @@
     if (div && DATA[div]){
       Object.keys(DATA[div].districts).forEach(function(ds){
         var opt = document.createElement('option');
-        opt.value = ds; opt.textContent = dName(ds);
+        var dd = DATA[div].districts[ds];
+        opt.value = ds; opt.textContent = dd ? (dd[lang] || dd.en) : ds;
         distSel.appendChild(opt);
       });
     }
