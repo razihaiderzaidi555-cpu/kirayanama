@@ -97,7 +97,8 @@ with app.app_context():
                     city=_dist, division=_div, tehsil=_teh,
                     area=area, exact_address=f"{area}، گلی نمبر {i+1}، مکان نمبر {10+i}",
                     property_type=ptype, bedrooms=br,
-                    bathrooms=ba, area_sqft=sqft, monthly_rent=rent, status="approved")
+                    bathrooms=ba, area_sqft=sqft, monthly_rent=rent, status="approved",
+                    photo_status="approved")
         db.session.add(l)
         db.session.flush()
         fn = demo_photo(ptype, i, f"demo_{i+1}.jpg")
