@@ -18,7 +18,7 @@ def get_text(key, lang="ur"):
 
 TRANSLATIONS = {
     "ur": {
-        "app_name": "کرایہ نامہ",
+        "app_name": "کرایہ نامہ™",
         "tagline": "مکان کرائے پر لینا/دینا — نہ ٹوکن، نہ ایڈوانس، صرف ڈیل پکی ہونے پر کمیشن۔",
         "mission_line": "📢 کرایہ نامہ کا اصل مقصد — آپ کو ایک آسان پلیٹ فارم دینا! مکان، دکان یا کوئی بھی چیز کرائے پر دینی ہو یا لینی ہو، یہاں سے آسانی سے رابطہ کریں۔",
         "nav_home": "ہوم",
@@ -147,6 +147,10 @@ TRANSLATIONS = {
         "view": "دیکھیں",
         "back": "واپس",
         "footer_note": "کرایہ نامہ — کرائے کے مکان کا باعتماد پلیٹ فارم۔",
+        "visitors_today": "آج کے وزٹر",
+        "visitors_total": "کل وزٹر",
+        "visitors_week": "اس ہفتے",
+        "admin_visitors": "ویب سائٹ کے وزٹر",
         "seo_home_title": "کرایہ نامہ | چنیوٹ، لالیاں، بھوانہ میں کرائے کے مکان",
         "seo_home_desc": "چنیوٹ، لالیاں اور بھوانہ میں کرائے کے مکان اور دکانیں۔ نہ ٹوکن نہ ایڈوانس — صرف ڈیل پکی ہونے پر 15% کمیشن۔",
         # W4 keys
@@ -178,7 +182,7 @@ TRANSLATIONS = {
         "decided_recently": "حالیہ فیصلے",
     },
     "en": {
-        "app_name": "KirayaNama",
+        "app_name": "KirayaNama™",
         "tagline": "Renting a house — no token, no advance, commission only when the deal is done.",
         "mission_line": "📢 Kirayanama's mission — one easy platform for everyone! Whether you want to rent out your house, shop, or anything — or you need one — connect easily right here.",
         "nav_home": "Home",
@@ -303,6 +307,10 @@ TRANSLATIONS = {
         "view": "View",
         "back": "Back",
         "footer_note": "KirayaNama — the trusted rental platform.",
+        "visitors_today": "Visitors today",
+        "visitors_total": "Total visitors",
+        "visitors_week": "This week",
+        "admin_visitors": "Website visitors",
         "seo_home_title": "KirayaNama | Houses for rent in Chiniot, Lalian, Bhuwana",
         "seo_home_desc": "Houses and shops for rent in Chiniot, Lalian and Bhuwana. No token, no advance — 15% commission only when the deal closes.",
         # W4 keys

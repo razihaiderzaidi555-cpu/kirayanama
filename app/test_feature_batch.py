@@ -701,6 +701,55 @@ with app.app_context():
     check("pay: detect_company none",
           payment_guard.detect_company("shukriya", [("easypaisa", "03115021212")]) is None)
 
+    # --- trademark symbol on brand displays ---
+    from translations import get_text as _gt
+    check("tm: ur app_name", _gt("app_name", "ur") == "کرایہ نامہ™")
+    check("tm: en app_name", _gt("app_name", "en") == "KirayaNama™")
+    r = client.get("/")
+    html = r.data.decode()
+    check("tm: home <title> has tm", "کرایہ نامہ™" in html)
+    check("tm: header brand has tm", "🏠 کرایہ نامہ™" in html)
+    check("tm: running sentence untouched",
+          "کرایہ نامہ کا اصل مقصد" in html and "کرایہ نامہ™ کا اصل مقصد" not in html)
+    r = client.get("/?lang=en")
+    check("tm: en header brand", "KirayaNama™" in r.data.decode())
+    client.get("/?lang=ur")
+
+    # --- visitor counter ---
+    from datetime import datetime as _dt, timedelta as _td
+    from models import VisitStat, visit_counts
+    t0, tot0 = visit_counts()
+    client.get("/")
+    t1, tot1 = visit_counts()
+    check("visits: public GET increments", t1 == t0 + 1 and tot1 == tot0 + 1)
+    client.get("/static/style.css")
+    check("visits: static skipped", visit_counts()[0] == t1)
+    client.get("/", headers={"User-Agent": "Googlebot/2.1 (+http://www.google.com/bot.html)"})
+    check("visits: bot skipped", visit_counts()[0] == t1)
+    client.get("/admin/")
+    check("visits: admin skipped", visit_counts()[0] == t1)
+    client.get("/api/payment-events?since=2020-01-01T00:00:00&token=x")
+    check("visits: api skipped", visit_counts()[0] == t1)
+    r = client.get("/")
+    fhtml = r.data.decode()
+    check("visits: footer shows counts",
+          "آج کے وزٹر" in fhtml and str(visit_counts()[0]) in fhtml)
+    yday = (_dt.utcnow() - _td(days=1)).strftime("%Y-%m-%d")
+    db.session.add(VisitStat(day=yday, count=41))
+    db.session.commit()
+    tb, _ = visit_counts()
+    client.get("/")
+    check("visits: day rollover",
+          visit_counts()[0] == tb + 1 and VisitStat.query.get(yday).count == 41)
+    client.get("/logout")
+    client.post("/login", data={"phone": "03000000001", "password": "admin123"})
+    r = client.get("/admin/")
+    dhtml = r.data.decode()
+    check("visits: admin dashboard card",
+          "👁️" in dhtml and "ویب سائٹ کے وزٹر" in dhtml
+          and str(visit_counts()[1]) in dhtml)
+    client.get("/logout")
+
 print(f"\n==== {len(passed)} passed, {len(failed)} failed ====")
 if failed:
     print("FAILED:", failed)

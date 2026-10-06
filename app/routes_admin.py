@@ -5,7 +5,7 @@ import os
 
 from models import (db, User, Listing, ContactRequest, Setting, get_setting,
                     SUSPICIOUS_MIN_VIEWS, SUSPICIOUS_MIN_CANCELLATIONS,
-                    Draw, TokenLedger, token_balance)
+                    Draw, TokenLedger, token_balance, visit_stats)
 from routes_lucky import run_weighted_draw
 from payment_guard import unlock_request
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, g, send_file, current_app
@@ -47,6 +47,10 @@ def dashboard():
                              .count()),
         "warned_users": User.query.filter(User.warnings > 0).count(),
     }
+    vstats = visit_stats()
+    stats.update({"visitors_total": vstats["total"],
+                  "visitors_today": vstats["today"],
+                  "visitors_week": vstats["week"]})
     return render_template("admin/dashboard.html", stats=stats)
 
 

@@ -182,6 +182,56 @@ class Setting(db.Model):
     value = db.Column(db.String(255), default="")
 
 
+class VisitStat(db.Model):
+    """Daily visitor counter — one row per calendar day (UTC).
+
+    Incremented by a before_request hook for real human page views
+    (static/API/admin/bot traffic excluded). Shown in the footer and
+    on the admin dashboard.
+    """
+    __tablename__ = "visit_stats"
+    day = db.Column(db.String(10), primary_key=True)  # YYYY-MM-DD
+    count = db.Column(db.Integer, default=0, nullable=False)
+
+
+def _today_str():
+    return datetime.utcnow().strftime("%Y-%m-%d")
+
+
+def record_visit():
+    """Increment today's counter. Returns (today_count, total_count)."""
+    today = _today_str()
+    row = VisitStat.query.get(today)
+    if row is None:
+        row = VisitStat(day=today, count=0)
+        db.session.add(row)
+    row.count = (row.count or 0) + 1
+    db.session.commit()
+    return row.count, visit_total()
+
+
+def visit_total():
+    total = (db.session.query(db.func.coalesce(db.func.sum(VisitStat.count), 0))
+             .scalar())
+    return int(total or 0)
+
+
+def visit_counts():
+    """(today, total) without incrementing — for pages that skip counting."""
+    today = _today_str()
+    row = VisitStat.query.get(today)
+    return (row.count if row else 0), visit_total()
+
+
+def visit_stats():
+    """today / total / last-7-days for the admin dashboard."""
+    today, total = visit_counts()
+    week_ago = (datetime.utcnow() - timedelta(days=6)).strftime("%Y-%m-%d")
+    week = (db.session.query(db.func.coalesce(db.func.sum(VisitStat.count), 0))
+            .filter(VisitStat.day >= week_ago).scalar())
+    return {"today": today, "total": total, "week": int(week or 0)}
+
+
 class PasswordReset(db.Model):
     """Email-OTP password recovery. Codes are hashed; expire in 10 minutes."""
     __tablename__ = "password_resets"

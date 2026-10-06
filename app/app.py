@@ -6,6 +6,7 @@ from flask import Flask, g, request, session, redirect, url_for, Response
 from flask_login import LoginManager
 
 from models import db, User, CITIES
+from models import record_visit, visit_counts
 from translations import get_text
 from punjab_divisions import (
     DIVISIONS, division_slugs, division_image, district_image, place_name, resolve_location,
@@ -44,12 +45,41 @@ def create_app():
             session["lang"] = lang
         g.lang = lang
 
+    @app.before_request
+    def _count_visit():
+        """Visitor counter: one increment per human GET page view.
+
+        Skips static files, the API, the admin area, health/robots/sitemap,
+        and obvious bots. Never breaks the request — failures fall back to
+        read-only counts. g.visitors_today/total feed the footer line.
+        """
+        try:
+            today, total = visit_counts()
+            if request.method == "GET":
+                path = request.path or ""
+                ua = (request.headers.get("User-Agent") or "").lower()
+                is_bot = any(s in ua for s in
+                             ("bot", "crawl", "spider", "slurp", "mediapartners",
+                              "baidu", "yandex", "semrush", "ahrefs"))
+                if (not path.startswith(("/static", "/api", "/admin",
+                                          "/healthz", "/robots.txt",
+                                          "/sitemap.xml"))
+                        and not is_bot):
+                    today, total = record_visit()
+            g.visitors_today, g.visitors_total = today, total
+        except Exception:
+            app.logger.warning("visit counter failed", exc_info=True)
+            g.visitors_today = getattr(g, "visitors_today", 0)
+            g.visitors_total = getattr(g, "visitors_total", 0)
+
     @app.context_processor
     def _inject():
         lang = getattr(g, "lang", "ur")
         return {
             "t": lambda k: get_text(k, lang),
             "lang": lang,
+            "visitors_today": getattr(g, "visitors_today", 0),
+            "visitors_total": getattr(g, "visitors_total", 0),
             "CITIES": CITIES,
             "city_name": lambda slug: place_name(slug, lang),
             "place_name": lambda slug: place_name(slug, lang),

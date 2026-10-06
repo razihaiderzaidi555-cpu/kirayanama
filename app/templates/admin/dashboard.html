@@ -54,6 +54,10 @@
       <p>{{ t('admin_backup') }}</p>
       <a class="btn btn-secondary btn-small" href="{{ url_for('admin.backup') }}">{{ t('download_backup') }}</a>
     </div>
+    <div class="card">
+      <h3>👁️ {{ stats.visitors_total }}</h3>
+      <p>{{ t('admin_visitors') }} — {{ t('visitors_today') }}: {{ stats.visitors_today }} | {{ t('visitors_week') }}: {{ stats.visitors_week }}</p>
+    </div>
   </div>
 </div>
 {% endblock %}
