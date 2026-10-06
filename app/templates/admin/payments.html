@@ -10,6 +10,8 @@
       {% if r.renter_shot %}
       <img class="listing-img" src="{{ url_for('static', filename='uploads/payments/' + r.renter_shot) }}" alt="">
       <p class="muted">{{ t('paid_at') }}: {{ r.renter_paid_at.strftime('%Y-%m-%d %H:%M') if r.renter_paid_at else '' }}</p>
+      {% if r.renter_verified %}<p>{{ t('auto_verified_badge') }}</p>
+      {% elif r.renter_review_reason %}<p class="muted">⚠️ {{ t('reason_' ~ r.renter_review_reason) }}</p>{% endif %}
       {% else %}<p class="muted">—</p>{% endif %}
     </div>
     <div>
@@ -17,10 +19,12 @@
       {% if r.landlord_shot %}
       <img class="listing-img" src="{{ url_for('static', filename='uploads/payments/' + r.landlord_shot) }}" alt="">
       <p class="muted">{{ t('paid_at') }}: {{ r.landlord_paid_at.strftime('%Y-%m-%d %H:%M') if r.landlord_paid_at else '' }}</p>
+      {% if r.landlord_verified %}<p>{{ t('auto_verified_badge') }}</p>
+      {% elif r.landlord_review_reason %}<p class="muted">⚠️ {{ t('reason_' ~ r.landlord_review_reason) }}</p>{% endif %}
       {% else %}<p class="muted">—</p>{% endif %}
     </div>
   </div>
-  {% if r.status == 'in_review' %}
+  {% if r.status in ('in_review', 'needs_review') %}
   <form method="post" action="{{ url_for('admin.verify_payment', rid=r.id) }}" style="display:inline">
     <button type="submit" class="btn btn-primary btn-small">{{ t('verify') }}</button>
   </form>
