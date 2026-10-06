@@ -297,6 +297,25 @@ def division_image(slug):
     return _FALLBACK_CARD_IMAGE
 
 
+def district_image(slug):
+    """Static path of the district's landmark image.
+
+    Fallback chain: district JPG -> its division's JPG -> generic card image.
+    Tehsil slugs resolve to their district's image.
+    """
+    rel = "img/districts/%s.jpg" % slug
+    here = os.path.dirname(os.path.abspath(__file__))
+    if os.path.exists(os.path.join(here, "static", rel)):
+        return rel
+    div = division_of_district(slug)
+    if div:
+        return division_image(div)
+    _tdiv, _tdist = locate_tehsil(slug)
+    if _tdist:
+        return district_image(_tdist)
+    return _FALLBACK_CARD_IMAGE
+
+
 def division_slugs():
     return [s for s in DISPLAY_ORDER if s in DIVISIONS] + \
         [s for s in DIVISIONS.keys() if s not in DISPLAY_ORDER]
