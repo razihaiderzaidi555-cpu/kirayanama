@@ -125,6 +125,17 @@ def _migrate_schema():
         stmts.append("ALTER TABLE listings ADD COLUMN photo_status VARCHAR(20)")
     if "photo_flag" not in cols:
         stmts.append("ALTER TABLE listings ADD COLUMN photo_flag VARCHAR(40)")
+    # automatic payment verification (2026-10-06): per-side auto-approval
+    # state on contact_requests. used_trx table is created by create_all().
+    crcols = {c["name"] for c in inspect(db.engine).get_columns("contact_requests")}
+    if "renter_verified" not in crcols:
+        stmts.append("ALTER TABLE contact_requests ADD COLUMN renter_verified BOOLEAN DEFAULT 0")
+    if "landlord_verified" not in crcols:
+        stmts.append("ALTER TABLE contact_requests ADD COLUMN landlord_verified BOOLEAN DEFAULT 0")
+    if "renter_review_reason" not in crcols:
+        stmts.append("ALTER TABLE contact_requests ADD COLUMN renter_review_reason VARCHAR(40)")
+    if "landlord_review_reason" not in crcols:
+        stmts.append("ALTER TABLE contact_requests ADD COLUMN landlord_review_reason VARCHAR(40)")
     if stmts:
         with db.engine.begin() as conn:
             for s in stmts:
