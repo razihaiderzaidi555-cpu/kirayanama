@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros_location.html" import location_selects with context %}
 {% block title %}{{ t('register_title') }}{% endblock %}
 {% block content %}
 <div class="container">
@@ -37,15 +38,7 @@
           {% if request.form.get('role') == 'landlord' %}checked{% endif %}>
           {{ t('role_landlord') }}</label>
       </div>
-      <div class="form-group">
-        <label for="city">{{ t('city') }}</label>
-        <select id="city" name="city">
-          {% for c in cities %}
-          <option value="{{ c }}" {% if request.form.get('city') == c %}selected{% endif %}>
-            {{ city_name(c) }}</option>
-          {% endfor %}
-        </select>
-      </div>
+      {{ location_selects(request.form.get('division', ''), request.form.get('district', ''), request.form.get('tehsil', '')) }}
       <button class="btn btn-primary" type="submit">{{ t('register_title') }}</button>
     </form>
     <p><a href="{{ url_for('auth.login') }}">{{ t('have_account') }}</a></p>
