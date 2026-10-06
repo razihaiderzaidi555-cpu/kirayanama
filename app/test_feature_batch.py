@@ -392,6 +392,189 @@ with app.app_context():
     check("person: scan skips missing files",
           person_guard.scan_photo_paths(["/tmp/nope1.png"]) is False)
 
+    # --- automatic payment verification (payment_guard) ---
+    import payment_guard
+    from models import UsedTrx, REQUEST_STATUS
+    from datetime import datetime as _dt
+
+    check("used_trx table", "used_trx" in insp.get_table_names())
+    _crcols = {c["name"] for c in insp.get_columns("contact_requests")}
+    check("cr.renter_verified column", "renter_verified" in _crcols)
+    check("cr.landlord_verified column", "landlord_verified" in _crcols)
+    check("cr.renter_review_reason column", "renter_review_reason" in _crcols)
+    check("cr.landlord_review_reason column", "landlord_review_reason" in _crcols)
+    check("needs_review in REQUEST_STATUS", "needs_review" in REQUEST_STATUS)
+
+    # guard unit tests
+    check("pay: amount exact match",
+          payment_guard.find_amount("Rs 2,250 bhej diye", 2250) is True)
+    check("pay: amount substring rejected",
+          payment_guard.find_amount("Rs 12250 bhej diye", 2250) is False)
+    check("pay: identifier plain",
+          payment_guard.find_identifier("send to 03115021212 now", ["03115021212"]) == "03115021212")
+    check("pay: identifier dashed shape",
+          payment_guard.find_identifier("0311-5021212", ["03115021212"]) == "03115021212")
+    check("pay: identifier absent",
+          payment_guard.find_identifier("send to 03009998888", ["03115021212"]) is None)
+    check("pay: hbl account matched",
+          payment_guard.find_identifier("ac 01737900590403", ["01737900590403"]) is not None)
+    check("pay: trx transaction-id shape",
+          payment_guard.extract_trx_id("Transaction ID: 12345678901") == "12345678901")
+    check("pay: trx tid shape",
+          payment_guard.extract_trx_id("TID 987654321") == "987654321")
+    check("pay: trx ref shape",
+          payment_guard.extract_trx_id("Ref No 555666777") == "555666777")
+    check("pay: no trx",
+          payment_guard.extract_trx_id("payment ho gai shukriya") is None)
+    with mock.patch("payment_guard.ocr_text",
+                     return_value="Easypaisa Rs 2,250 to 03115021212 Transaction ID 12345678901"):
+        ok, trx, reason = payment_guard.verify_payment_screenshot(
+            "/tmp/x.png", 2250, ["03115021212", "01737900590403"])
+        check("pay: full pass", ok is True and trx == "12345678901" and reason == "")
+    with mock.patch("payment_guard.ocr_text",
+                     return_value="Easypaisa Rs 2,000 to 03115021212 Transaction ID 12345678901"):
+        check("pay: amount mismatch",
+              payment_guard.verify_payment_screenshot(
+                  "/tmp/x.png", 2250, ["03115021212"])[2] == "amount_mismatch")
+    with mock.patch("payment_guard.ocr_text",
+                     return_value="Easypaisa Rs 2,250 to 03009998888 Transaction ID 12345678901"):
+        check("pay: identifier missing",
+              payment_guard.verify_payment_screenshot(
+                  "/tmp/x.png", 2250, ["03115021212"])[2] == "identifier_missing")
+    with mock.patch("payment_guard.ocr_text",
+                     return_value="Easypaisa Rs 2,250 to 03115021212 shukriya"):
+        check("pay: trx missing",
+              payment_guard.verify_payment_screenshot(
+                  "/tmp/x.png", 2250, ["03115021212"])[2] == "trx_missing")
+    with mock.patch("payment_guard.ocr_text",
+                     return_value="Rs ۲۲۵۰ to 03115021212 Transaction ID 12345678901"):
+        check("pay: urdu digits amount",
+              payment_guard.verify_payment_screenshot(
+                  "/tmp/x.png", 2250, ["03115021212"])[0] is True)
+    with mock.patch("payment_guard.ocr_text", side_effect=RuntimeError("boom")):
+        check("pay: OCR crash -> ocr_error, no raise",
+              payment_guard.verify_payment_screenshot(
+                  "/tmp/x.png", 2250, ["03115021212"])[2] == "ocr_error")
+    with mock.patch("payment_guard.ocr_text", return_value=None):
+        check("pay: OCR None -> ocr_error",
+              payment_guard.verify_payment_screenshot(
+                  "/tmp/x.png", 2250, ["03115021212"])[2] == "ocr_error")
+    with mock.patch("payment_guard.ocr_text", return_value=""):
+        check("pay: OCR empty -> ocr_error",
+              payment_guard.verify_payment_screenshot(
+                  "/tmp/x.png", 2250, ["03115021212"])[2] == "ocr_error")
+
+    # route-level: auto-verify flow with mocked OCR
+    def _mkdeal(rent):
+        lst = Listing(title_ur="ڈیل ٹیسٹ", title_en="deal", desc_ur="x",
+                      city="chiniot", division="faisalabad", tehsil="chiniot",
+                      monthly_rent=rent, status="approved", photo_status="approved",
+                      landlord_id=ll.id, property_type="house")
+        db.session.add(lst)
+        db.session.commit()
+        c = ContactRequest(listing_id=lst.id, renter_id=renter.id,
+                           landlord_id=ll.id, status="awaiting_payment",
+                           renter_yes_at=_dt.utcnow(), landlord_yes_at=_dt.utcnow())
+        db.session.add(c)
+        db.session.commit()
+        return c
+
+    def _shot():
+        b = io.BytesIO()
+        img.save(b, "PNG")
+        b.seek(0)
+        return (b, "shot.png")
+
+    cr1 = _mkdeal(15000)  # commission = 2250
+    client.get("/logout")
+    client.post("/login", data={"phone": "03000000003", "password": "rt123456"})
+    with mock.patch("routes_contact.verify_payment_screenshot",
+                    return_value=(True, "TRXAAA111", "")):
+        r = client.post(f"/request/{cr1.id}/payment",
+                        data={"screenshot": _shot()},
+                        content_type="multipart/form-data", follow_redirects=True)
+    c1 = ContactRequest.query.get(cr1.id)
+    check("pay: renter auto-verified", c1.renter_verified is True)
+    check("pay: trx claimed in UsedTrx", UsedTrx.query.get("TRXAAA111") is not None)
+    check("pay: one side only -> awaiting_payment", c1.status == "awaiting_payment")
+    check("pay: auto flash shown", "خودکار تصدیق" in r.data.decode())
+
+    client.get("/logout")
+    client.post("/login", data={"phone": "03000000002", "password": "ll123456"})
+    with mock.patch("routes_contact.verify_payment_screenshot",
+                    return_value=(True, "TRXBBB222", "")):
+        client.post(f"/request/{cr1.id}/payment",
+                    data={"screenshot": _shot()},
+                    content_type="multipart/form-data", follow_redirects=True)
+    c1 = ContactRequest.query.get(cr1.id)
+    check("pay: both sides auto -> unlocked", c1.status == "unlocked")
+    check("pay: verified_at set", c1.verified_at is not None)
+
+    # replay: same trx on another deal
+    cr2 = _mkdeal(15000)
+    client.get("/logout")
+    client.post("/login", data={"phone": "03000000003", "password": "rt123456"})
+    with mock.patch("routes_contact.verify_payment_screenshot",
+                    return_value=(True, "TRXAAA111", "")):
+        client.post(f"/request/{cr2.id}/payment",
+                    data={"screenshot": _shot()},
+                    content_type="multipart/form-data", follow_redirects=True)
+    c2 = ContactRequest.query.get(cr2.id)
+    check("pay: replay trx -> needs_review", c2.status == "needs_review")
+    check("pay: replay trx -> not verified", c2.renter_verified is not True)
+    check("pay: replay reason recorded", c2.renter_review_reason == "trx_reused")
+
+    # amount mismatch
+    cr3 = _mkdeal(15000)
+    with mock.patch("routes_contact.verify_payment_screenshot",
+                    return_value=(False, None, "amount_mismatch")):
+        client.post(f"/request/{cr3.id}/payment",
+                    data={"screenshot": _shot()},
+                    content_type="multipart/form-data", follow_redirects=True)
+    c3 = ContactRequest.query.get(cr3.id)
+    check("pay: mismatch -> needs_review", c3.status == "needs_review")
+    check("pay: mismatch reason saved", c3.renter_review_reason == "amount_mismatch")
+    check("pay: mismatch keeps screenshot", c3.renter_shot is not None)
+
+    # OCR crash -> fail open
+    cr4 = _mkdeal(15000)
+    with mock.patch("routes_contact.verify_payment_screenshot",
+                    side_effect=RuntimeError("boom")):
+        r = client.post(f"/request/{cr4.id}/payment",
+                        data={"screenshot": _shot()},
+                        content_type="multipart/form-data", follow_redirects=True)
+        check("pay: guard crash -> no 500", r.status_code in (200, 302))
+    c4 = ContactRequest.query.get(cr4.id)
+    check("pay: crash -> needs_review", c4.status == "needs_review")
+    check("pay: crash reason ocr_error", c4.renter_review_reason == "ocr_error")
+
+    # re-upload after failure succeeds
+    with mock.patch("routes_contact.verify_payment_screenshot",
+                    return_value=(True, "TRXCCC333", "")):
+        client.post(f"/request/{cr4.id}/payment",
+                    data={"screenshot": _shot()},
+                    content_type="multipart/form-data", follow_redirects=True)
+    c4 = ContactRequest.query.get(cr4.id)
+    check("pay: reupload -> verified", c4.renter_verified is True)
+    check("pay: reupload -> awaiting_payment", c4.status == "awaiting_payment")
+
+    # request page renders in needs_review with re-upload hint
+    r = client.get(f"/request/{cr3.id}")
+    check("pay: request page 200 on needs_review", r.status_code == 200)
+    check("pay: reupload hint shown", "دوبارہ اپ لوڈ" in r.data.decode())
+
+    # admin queue lists needs_review + manual verify/reject still work
+    client.get("/logout")
+    client.post("/login", data={"phone": "03000000001", "password": "admin123"})
+    r = client.get("/admin/payments")
+    check("pay: admin queue lists needs_review", "ڈیل ٹیسٹ" in r.data.decode())
+    r = client.post(f"/admin/payments/{cr2.id}/verify", follow_redirects=True)
+    check("pay: admin manual verify on needs_review",
+          ContactRequest.query.get(cr2.id).status == "unlocked")
+    r = client.post(f"/admin/payments/{cr3.id}/reject", follow_redirects=True)
+    check("pay: admin reject on needs_review",
+          ContactRequest.query.get(cr3.id).status == "rejected")
+
 print(f"\n==== {len(passed)} passed, {len(failed)} failed ====")
 if failed:
     print("FAILED:", failed)
