@@ -16,7 +16,9 @@ bp = Blueprint("public", __name__)
 
 
 def _approved():
-    return Listing.query.filter_by(status="approved", is_closed=False)
+    # publicly visible = listing approved AND photos approved AND not closed
+    return Listing.query.filter_by(status="approved", photo_status="approved",
+                                   is_closed=False)
 
 
 @bp.route("/")
@@ -179,7 +181,7 @@ def listings_page():
 @bp.route("/listing/<int:listing_id>")
 def listing_detail(listing_id):
     listing = Listing.query.get_or_404(listing_id)
-    if listing.status != "approved" or listing.is_closed:
+    if listing.status != "approved" or listing.photo_status != "approved" or listing.is_closed:
         abort(404)
     # Anti-bypass monitoring: count views (only committed for approved listings).
     listing.view_count = (listing.view_count or 0) + 1
