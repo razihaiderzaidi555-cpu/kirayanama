@@ -9,6 +9,8 @@ from flask_login import login_required, current_user
 from models import (db, User, Listing, ListingPhoto, ContactRequest,
                     next_public_id, CITIES, PROPERTY_TYPES,
                     token_balance, ensure_referral_code)
+from punjab_divisions import (DIVISIONS, division_slugs, resolve_location,
+                              is_valid_location)
 from utils import save_upload, find_phone_numbers
 from translations import get_text
 
@@ -73,12 +75,21 @@ def _save_photos(listing, make_first_primary):
 
 
 def _read_listing_form():
+    division = request.form.get("division") or ""
+    district = request.form.get("district") or ""
+    tehsil = request.form.get("tehsil") or ""
+    city = request.form.get("city") or ""  # legacy district/tehsil slug
+    if not is_valid_location(division, district, tehsil):
+        # Back-compat: old clients/tests post only `city`.
+        division, district, tehsil = resolve_location(city=city)
     return {
         "title_ur": (request.form.get("title_ur") or "").strip(),
         "title_en": (request.form.get("title_en") or "").strip(),
         "desc_ur": (request.form.get("desc_ur") or "").strip(),
         "desc_en": (request.form.get("desc_en") or "").strip(),
-        "city": request.form.get("city") if request.form.get("city") in CITIES else CITIES[0],
+        "division": division,
+        "city": district,  # Listing.city stores the DISTRICT slug
+        "tehsil": tehsil,
         "area": (request.form.get("area") or "").strip(),
         "exact_address": (request.form.get("exact_address") or "").strip(),
         "property_type": (request.form.get("property_type")
@@ -175,7 +186,8 @@ def listing_new():
             db.session.commit()
             return redirect(url_for("landlord.dashboard"))
     return render_template("landlord/listing_form.html", listing=None,
-                           cities=CITIES, ptypes=PROPERTY_TYPES)
+                           cities=CITIES, ptypes=PROPERTY_TYPES,
+                           divisions=DIVISIONS)
 
 
 @bp.route("/listings/<int:listing_id>/edit", methods=["GET", "POST"])
@@ -207,7 +219,8 @@ def listing_edit(listing_id):
             db.session.commit()
             return redirect(url_for("landlord.dashboard"))
     return render_template("landlord/listing_form.html", listing=listing,
-                           cities=CITIES, ptypes=PROPERTY_TYPES)
+                           cities=CITIES, ptypes=PROPERTY_TYPES,
+                           divisions=DIVISIONS)
 
 
 @bp.route("/listings/<int:listing_id>/close", methods=["POST"])
