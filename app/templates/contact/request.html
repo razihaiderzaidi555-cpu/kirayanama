@@ -23,7 +23,7 @@
   <div class="steps">
     <div class="step{% if cr.status=='pending_yes' %} step-active{% endif %}">{{ t('step_consent') }}</div>
     <div class="step{% if cr.status=='awaiting_payment' %} step-active{% endif %}">{{ t('step_payment') }}</div>
-    <div class="step{% if cr.status=='in_review' %} step-active{% endif %}">{{ t('step_review') }}</div>
+    <div class="step{% if cr.status in ('in_review', 'needs_review') %} step-active{% endif %}">{{ t('step_review') }}</div>
     <div class="step{% if cr.status=='unlocked' %} step-active{% endif %}">{{ t('step_unlocked') }}</div>
   </div>
 
@@ -38,34 +38,39 @@
         </form>
       {% endif %}
 
-    {% elif cr.status == 'awaiting_payment' %}
+    {% elif cr.status in ('awaiting_payment', 'needs_review') %}
       <p><strong>{{ t('commission') }}: {{ cr.commission }}</strong></p>
       <p class="muted">{{ t('platform_numbers') }}: {{ t('jazzcash') }}: {{ jazzcash }} · {{ t('easypaisa') }}: {{ easypaisa }} · {{ t('upaisa') }}: {{ upaisa }} · {{ t('hbl') }}: {{ hbl }}</p>
       <p>{{ t('payment_instructions') }}</p>
-      {% if is_renter and not cr.renter_shot %}
-        <form method="post" action="{{ url_for('contact.payment', rid=cr.id) }}" enctype="multipart/form-data">
-          <div class="form-group">
-            <label>{{ t('upload_shot') }}</label>
-            <input type="file" name="screenshot" accept="image/*" required>
-          </div>
-          <button class="btn btn-primary" type="submit">{{ t('upload_btn') }}</button>
-        </form>
-      {% elif is_renter %}
-        <p class="muted">{{ t('shot_uploaded_wait') }}</p>
-      {% endif %}
-      {% if is_landlord and not cr.landlord_shot %}
-        <form method="post" action="{{ url_for('contact.payment', rid=cr.id) }}" enctype="multipart/form-data">
-          <div class="form-group">
-            <label>{{ t('upload_shot') }}</label>
-            <input type="file" name="screenshot" accept="image/*" required>
-          </div>
-          <button class="btn btn-primary" type="submit">{{ t('upload_btn') }}</button>
-        </form>
+      {% if is_renter %}
+        {% if cr.renter_verified %}
+          <p>{{ t('auto_verified_badge') }}</p>
+        {% else %}
+          {% if cr.renter_review_reason %}<p class="muted">{{ t('reupload_hint') }}: {{ t('reason_' ~ cr.renter_review_reason) }}</p>{% endif %}
+          <form method="post" action="{{ url_for('contact.payment', rid=cr.id) }}" enctype="multipart/form-data">
+            <div class="form-group">
+              <label>{{ t('upload_shot') }}</label>
+              <input type="file" name="screenshot" accept="image/*" required>
+            </div>
+            <button class="btn btn-primary" type="submit">{{ t('upload_btn') }}</button>
+          </form>
+        {% endif %}
       {% elif is_landlord %}
-        <p class="muted">{{ t('shot_uploaded_wait') }}</p>
+        {% if cr.landlord_verified %}
+          <p>{{ t('auto_verified_badge') }}</p>
+        {% else %}
+          {% if cr.landlord_review_reason %}<p class="muted">{{ t('reupload_hint') }}: {{ t('reason_' ~ cr.landlord_review_reason) }}</p>{% endif %}
+          <form method="post" action="{{ url_for('contact.payment', rid=cr.id) }}" enctype="multipart/form-data">
+            <div class="form-group">
+              <label>{{ t('upload_shot') }}</label>
+              <input type="file" name="screenshot" accept="image/*" required>
+            </div>
+            <button class="btn btn-primary" type="submit">{{ t('upload_btn') }}</button>
+          </form>
+        {% endif %}
       {% endif %}
 
-    {% elif cr.status == 'in_review' %}
+    {% elif cr.status in ('in_review', 'needs_review') %}
       <p>{{ t('in_review_msg') }}</p>
 
     {% elif cr.status == 'unlocked' %}
@@ -164,7 +169,7 @@
       <p>{{ t('request_cancelled') }}</p>
     {% endif %}
 
-    {% if cr.status in ('pending_yes', 'awaiting_payment') and (is_renter or is_landlord) %}
+    {% if cr.status in ('pending_yes', 'awaiting_payment', 'needs_review') and (is_renter or is_landlord) %}
     <form method="post" action="{{ url_for('contact.cancel', rid=cr.id) }}" style="margin-top:12px">
       <button class="btn btn-secondary btn-small" type="submit">{{ t('cancel_request') }}</button>
     </form>
