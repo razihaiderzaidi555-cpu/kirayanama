@@ -7,6 +7,10 @@ from flask_login import LoginManager
 
 from models import db, User, CITIES
 from translations import get_text
+from punjab_divisions import (
+    DIVISIONS, division_slugs, place_name, resolve_location,
+    division_of_district, locate_tehsil, LEGACY_CITY_MAP,
+)
 
 login_manager = LoginManager()
 login_manager.login_view = "auth.login"
@@ -47,7 +51,13 @@ def create_app():
             "t": lambda k: get_text(k, lang),
             "lang": lang,
             "CITIES": CITIES,
-            "city_name": lambda slug: get_text(f"city_{slug}", lang),
+            "city_name": lambda slug: place_name(slug, lang),
+            "place_name": lambda slug: place_name(slug, lang),
+            "division_name": lambda slug: place_name(slug, lang),
+            "district_name": lambda slug: place_name(slug, lang),
+            "tehsil_name": lambda slug: place_name(slug, lang),
+            "DIVISIONS": DIVISIONS,
+            "division_slugs": division_slugs(),
         }
 
     # blueprints (each worker owns one module; missing ones are skipped)
@@ -74,6 +84,7 @@ def create_app():
     with app.app_context():
         db.create_all()
         _migrate_schema()
+        _migrate_locations()
         _ensure_production_defaults()
 
     return app
@@ -95,10 +106,47 @@ def _migrate_schema():
     ucols = {c["name"] for c in inspect(db.engine).get_columns("users")}
     if "email" not in ucols:
         stmts.append("ALTER TABLE users ADD COLUMN email VARCHAR(120)")
+    # division/district/tehsil hierarchy (2026-10-06 Punjab-wide launch)
+    if "division" not in cols:
+        stmts.append("ALTER TABLE listings ADD COLUMN division VARCHAR(40)")
+    if "tehsil" not in cols:
+        stmts.append("ALTER TABLE listings ADD COLUMN tehsil VARCHAR(40)")
+    if "division" not in ucols:
+        stmts.append("ALTER TABLE users ADD COLUMN division VARCHAR(40)")
+    if "district" not in ucols:
+        stmts.append("ALTER TABLE users ADD COLUMN district VARCHAR(40)")
     if stmts:
         with db.engine.begin() as conn:
             for s in stmts:
                 conn.execute(text(s))
+
+
+def _migrate_locations():
+    """One-time data migration: flat city slugs -> (division, district, tehsil).
+
+    Idempotent — only touches rows whose division is still empty. Runs every
+    boot so PythonAnywhere picks it up on the next reload after git pull.
+    """
+    from models import User, Listing
+    moved = 0
+    for listing in Listing.query.filter(
+            db.or_(Listing.division.is_(None), Listing.division == "")).all():
+        div, dist, teh = resolve_location(city=listing.city)
+        listing.division = div
+        listing.tehsil = teh
+        if listing.city in LEGACY_CITY_MAP and listing.city != dist:
+            listing.city = dist  # normalize legacy tehsil-slug to district slug
+        moved += 1
+    for user in User.query.filter(
+            db.or_(User.division.is_(None), User.division == "")).all():
+        div, dist, teh = resolve_location(city=user.city)
+        user.division = div
+        user.district = dist
+        if teh:
+            user.city = teh  # user.city now stores the tehsil slug
+        moved += 1
+    if moved:
+        db.session.commit()
 
 
 def _ensure_production_defaults():
@@ -119,7 +167,8 @@ def _ensure_production_defaults():
             db.session.add(Setting(key=key, value=value))
     if User.query.filter_by(role="admin").first() is None:
         admin = User(public_id="KN-1", name="Admin", phone="03115021212",
-                     role="admin", city="chiniot")
+                     role="admin", city="chiniot",
+                     division="faisalabad", district="chiniot")
         admin.set_password("admin123")
         db.session.add(admin)
     db.session.commit()
