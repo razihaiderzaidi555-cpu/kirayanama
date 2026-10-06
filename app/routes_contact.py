@@ -1,11 +1,19 @@
 """W3 — contact / dual-lock escrow flow."""
-from models import db, User, Listing, ContactRequest, get_setting
+import os
+
+from models import db, User, Listing, ContactRequest, UsedTrx, get_setting
 from utils import save_upload
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort
+from payment_guard import verify_payment_screenshot, unlock_request
+from translations import get_text
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort, g
 from flask_login import login_required, current_user
 from datetime import datetime
 
 bp = Blueprint("contact", __name__)
+
+
+def T(key):
+    return get_text(key, getattr(g, "lang", "ur"))
 
 
 def _get_request_or_403(rid):
@@ -146,7 +154,7 @@ def payment(rid):
     is_landlord = current_user.id == cr.landlord_id
     if not (is_renter or is_landlord):
         abort(403)
-    if cr.status != "awaiting_payment":
+    if cr.status not in ("awaiting_payment", "needs_review"):
         abort(400)
     file = request.files.get("screenshot")
     if not file or not file.filename:
@@ -157,17 +165,69 @@ def payment(rid):
     except ValueError:
         flash("shot_bad_file", "err")
         return redirect(url_for("contact.request_detail", rid=cr.id))
+    # --- automatic payment verification (fail-open: any crash -> review) ---
+    identifiers = [get_setting(k) for k in
+                   ("jazzcash_number", "easypaisa_number", "upaisa_number",
+                    "hbl_account")]
+    img_path = os.path.join(current_app.config["UPLOAD_FOLDER"], "payments", name)
+    try:
+        ok, trx_id, reason = verify_payment_screenshot(
+            img_path, cr.commission, identifiers)
+    except Exception:  # noqa: BLE001 - guard must never break uploads
+        ok, trx_id, reason = False, None, "ocr_error"
+    side = "renter" if is_renter else "landlord"
+    claimed = UsedTrx.query.get(trx_id) if (ok and trx_id) else None
+    if ok and trx_id and (claimed is None or
+                          (claimed.contact_request_id == cr.id and
+                           claimed.side == side)):
+        # Fresh transaction (or this side's own re-upload): auto-approve.
+        if claimed is None:
+            db.session.add(UsedTrx(trx_id=trx_id, contact_request_id=cr.id,
+                                   side=side))
+        if is_renter:
+            cr.renter_verified = True
+            cr.renter_review_reason = ""
+        else:
+            cr.landlord_verified = True
+            cr.landlord_review_reason = ""
+        flash(T("shot_auto_verified"), "ok")
+    else:
+        # Same TrxID claimed before -> replay fraud attempt.
+        if ok and trx_id:
+            reason = "trx_reused"
+        if is_renter:
+            cr.renter_verified = False
+            cr.renter_review_reason = reason or "ocr_error"
+        else:
+            cr.landlord_verified = False
+            cr.landlord_review_reason = reason or "ocr_error"
+        flash(T("shot_needs_review"), "err")
     if is_renter:
         cr.renter_shot = name
         cr.renter_paid_at = datetime.utcnow()
     else:
         cr.landlord_shot = name
         cr.landlord_paid_at = datetime.utcnow()
-    if cr.renter_shot and cr.landlord_shot:
-        cr.status = "in_review"
+    _refresh_payment_status(cr)
     db.session.commit()
-    flash("shot_saved", "ok")
     return redirect(url_for("contact.request_detail", rid=cr.id))
+
+
+def _refresh_payment_status(cr):
+    """Recompute the overall request status after a screenshot upload.
+
+    - both sides auto-verified -> unlocked immediately (dual-YES + both-paid
+      logic preserved; just no human in the loop anymore),
+    - any uploaded-but-unverified side -> 'needs_review' (admin queue),
+    - otherwise a side is still pending -> 'awaiting_payment'.
+    """
+    if cr.renter_verified and cr.landlord_verified:
+        unlock_request(cr)
+    elif ((cr.renter_shot and not cr.renter_verified) or
+          (cr.landlord_shot and not cr.landlord_verified)):
+        cr.status = "needs_review"
+    elif cr.renter_shot or cr.landlord_shot:
+        cr.status = "awaiting_payment"
 
 
 @bp.route("/request/<int:rid>/rate", methods=["POST"])
