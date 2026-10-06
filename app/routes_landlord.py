@@ -53,16 +53,22 @@ def _has_uploaded_photos():
 
 
 def _save_photos(listing, make_first_primary):
-    """Save uploaded photos (first saved one becomes primary if asked)."""
+    """Save uploaded photos (first saved one becomes primary if asked).
+
+    Returns the absolute paths of the files actually saved (for photo_guard).
+    """
+    import os
+    saved = []
     base = len(listing.photos)
     idx = 0
+    upload_root = current_app.config["UPLOAD_FOLDER"]
     for f in request.files.getlist("photos"):
         if not f or not f.filename:
             continue
         try:
             filename = save_upload(
                 f, "listings",
-                upload_root=current_app.config["UPLOAD_FOLDER"])
+                upload_root=upload_root)
         except ValueError:
             flash(T("photo_bad"))
             continue
@@ -71,7 +77,24 @@ def _save_photos(listing, make_first_primary):
             is_primary=(make_first_primary and idx == 0),
             sort_order=base + idx,
         ))
+        saved.append(os.path.join(upload_root, "listings", filename))
         idx += 1
+    return saved
+
+
+def _apply_photo_guard(listing, new_paths):
+    """OCR-scan newly uploaded photos; flag the listing if a phone number is
+    found in any photo. Never raises — uploads must not break."""
+    if not new_paths:
+        return
+    try:
+        from photo_guard import scan_photo_paths
+        hit = scan_photo_paths(new_paths)
+    except Exception:  # noqa: BLE001 - guard must never break the flow
+        return
+    if hit:
+        listing.photo_status = "pending"
+        listing.photo_flag = "phone_detected"
 
 
 def _read_listing_form():
@@ -177,7 +200,8 @@ def listing_new():
             flash(err)
         else:
             listing = Listing(landlord_id=current_user.id, status="pending", **data)
-            _save_photos(listing, make_first_primary=True)
+            new_paths = _save_photos(listing, make_first_primary=True)
+            _apply_photo_guard(listing, new_paths)
             if _apply_phone_scan(listing, data):
                 flash(T("listing_rejected_phone"))
             else:
@@ -210,7 +234,12 @@ def listing_edit(listing_id):
         else:
             for k, v in data.items():
                 setattr(listing, k, v)
-            _save_photos(listing, make_first_primary=not listing.photos)
+            new_paths = _save_photos(listing, make_first_primary=not listing.photos)
+            if new_paths:
+                # new photos -> back to the photo review queue
+                listing.photo_status = "pending"
+                listing.photo_flag = ""
+            _apply_photo_guard(listing, new_paths)
             if _apply_phone_scan(listing, data):
                 # A number snuck in via edit -> kill the listing, needs re-review.
                 flash(T("listing_rejected_phone"))
