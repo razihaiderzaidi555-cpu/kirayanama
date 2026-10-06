@@ -42,12 +42,18 @@
       <p><strong>{{ t('commission') }}: {{ cr.commission }}</strong></p>
       <p class="muted">{{ t('platform_numbers') }}: {{ t('jazzcash') }}: {{ jazzcash }} · {{ t('easypaisa') }}: {{ easypaisa }} · {{ t('upaisa') }}: {{ upaisa }} · {{ t('hbl') }}: {{ hbl }}</p>
       <p>{{ t('payment_instructions') }}</p>
+      <p class="muted">{{ t('payment_sla') }}</p>
       {% if is_renter %}
         {% if cr.renter_verified %}
           <p>{{ t('auto_verified_badge') }}</p>
         {% else %}
           {% if cr.renter_review_reason %}<p class="muted">{{ t('reupload_hint') }}: {{ t('reason_' ~ cr.renter_review_reason) }}</p>{% endif %}
           <form method="post" action="{{ url_for('contact.payment', rid=cr.id) }}" enctype="multipart/form-data">
+            <div class="form-group">
+              <label>{{ t('tid_label') }}</label>
+              <input type="text" name="tid" inputmode="numeric" required
+                     placeholder="{{ t('tid_hint') }}">
+            </div>
             <div class="form-group">
               <label>{{ t('upload_shot') }}</label>
               <input type="file" name="screenshot" accept="image/*" required>
@@ -61,6 +67,11 @@
         {% else %}
           {% if cr.landlord_review_reason %}<p class="muted">{{ t('reupload_hint') }}: {{ t('reason_' ~ cr.landlord_review_reason) }}</p>{% endif %}
           <form method="post" action="{{ url_for('contact.payment', rid=cr.id) }}" enctype="multipart/form-data">
+            <div class="form-group">
+              <label>{{ t('tid_label') }}</label>
+              <input type="text" name="tid" inputmode="numeric" required
+                     placeholder="{{ t('tid_hint') }}">
+            </div>
             <div class="form-group">
               <label>{{ t('upload_shot') }}</label>
               <input type="file" name="screenshot" accept="image/*" required>
