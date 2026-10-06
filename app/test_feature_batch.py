@@ -224,7 +224,7 @@ with app.app_context():
     check("mailer unconfigured in dev", is_configured() is False)
     check("send_email False not crash", send_email("x@y.com", "s", "b") is False)
 
-    # --- photo review queue ---
+    # --- automatic photo checks: clean photo auto-approves (no admin needed) ---
     check("listings.photo_status column", "photo_status" in cols_list)
     check("listings.photo_flag column", "photo_flag" in cols_list)
     client.get("/logout")
@@ -237,24 +237,64 @@ with app.app_context():
         "property_type": "house", "photos": (buf3, "p3.png")},
         content_type="multipart/form-data", follow_redirects=True)
     pl = Listing.query.filter_by(title_ur="فوٹو ٹیسٹ").first()
-    check("new listing photo_status pending", pl is not None and pl.photo_status == "pending")
-    check("photo-pending hidden from public", client.get(f"/listing/{pl.id}").status_code == 404)
-    check("photo-pending not in browse", "فوٹو ٹیسٹ" not in client.get("/listings").data.decode())
-    check("photo-pending contact blocked", client.post(f"/contact/{pl.id}").status_code in (302, 404))
+    # test env has no cv2/tesseract -> both guards fail open -> auto approved
+    check("clean photo auto-approved", pl is not None and pl.photo_status == "approved")
+    check("clean photo flag empty", pl.photo_flag == "")
+    check("hidden: listing status still pending",
+          client.get(f"/listing/{pl.id}").status_code == 404)
+    check("not in browse (listing pending)",
+          "فوٹو ٹیسٹ" not in client.get("/listings").data.decode())
+    check("contact blocked (listing pending)",
+          client.post(f"/contact/{pl.id}").status_code in (302, 404))
 
-    # admin photo review queue: approve flow
+    # admin photo review page still exists (background queue for OCR flags)
     client.get("/logout")
     client.post("/login", data={"phone": "03000000001", "password": "admin123"})
     r = client.get("/admin/photos")
     check("photo review page 200", r.status_code == 200)
+    # simulate an OCR-flagged listing, then approve it
+    pl.photo_status = "pending"; pl.photo_flag = "phone_detected"; db.session.commit()
+    r = client.get("/admin/photos")
     check("photo review lists pending", "فوٹو ٹیسٹ" in r.data.decode())
     r = client.post(f"/admin/photos/{pl.id}/approve", follow_redirects=True)
     check("photo approve sets approved", Listing.query.get(pl.id).photo_status == "approved")
     check("photo approve clears flag", Listing.query.get(pl.id).photo_flag == "")
-    check("still hidden: listing status pending",
-          client.get(f"/listing/{pl.id}").status_code == 404)
     pl.status = "approved"; db.session.commit()
     check("visible after both approvals", client.get(f"/listing/{pl.id}").status_code == 200)
+
+    # pipeline: mocked person detection -> auto reject with Urdu reason
+    from unittest import mock
+    buf5 = io.BytesIO(); img3.save(buf5, "PNG"); buf5.seek(0)
+    client.get("/logout")
+    client.post("/login", data={"phone": "03000000002", "password": "ll123456"})
+    with mock.patch("person_guard.scan_photo_paths", return_value=True):
+        client.post("/dashboard/listings/new", data={
+            "title_ur": "شخص ٹیسٹ", "monthly_rent": "15000",
+            "division": "faisalabad", "district": "chiniot", "tehsil": "chiniot",
+            "property_type": "house", "photos": (buf5, "p5.png")},
+            content_type="multipart/form-data", follow_redirects=True)
+    pp = Listing.query.filter_by(title_ur="شخص ٹیسٹ").first()
+    check("person detected -> photo rejected",
+          pp is not None and pp.photo_status == "rejected")
+    check("person detected -> flag set", pp.photo_flag == "person_detected")
+    check("landlord sees Urdu reject reason",
+          pp.rejection_reason == "تصویر میں کوئی شخص نظر آ رہا ہے — خالی مکان/دکان کی تصویر لگائیں۔")
+    check("rejected photo hidden from public",
+          client.get(f"/listing/{pp.id}").status_code == 404)
+
+    # report-photo flow: viewer flags -> hidden until admin clears
+    client.get("/logout")
+    client.post("/login", data={"phone": "03000000003", "password": "rt123456"})
+    r = client.post(f"/listing/{pl.id}/report-photo", follow_redirects=True)
+    check("report-photo 302/200", r.status_code in (200, 302))
+    rp = Listing.query.get(pl.id)
+    check("report sets user_reported flag", rp.photo_flag == "user_reported")
+    check("reported listing hidden", client.get(f"/listing/{pl.id}").status_code == 404)
+    client.get("/logout")
+    client.post("/login", data={"phone": "03000000001", "password": "admin123"})
+    client.post(f"/admin/photos/{pl.id}/approve", follow_redirects=True)
+    check("admin clears report -> visible again",
+          client.get(f"/listing/{pl.id}").status_code == 200)
 
     # admin photo review queue: reject with reason
     buf4 = io.BytesIO(); img3.save(buf4, "PNG"); buf4.seek(0)
@@ -314,6 +354,43 @@ with app.app_context():
               photo_guard.find_phone_in_image("/tmp/x.png") is None)
     check("guard: scan skips missing files",
           photo_guard.scan_photo_paths(["/tmp/nope1.png", "/tmp/nope2.png"]) is None)
+
+    # --- person_guard unit tests ---
+    import person_guard
+    check("person: no cv2 -> fail open False, no raise",
+          person_guard.person_detected_in_image("/tmp/knpg-does-not-exist.png") is False)
+    check("person: threshold strong hit",
+          person_guard._is_valid_detection(0.9, 0.50) is True)
+    check("person: low confidence rejected",
+          person_guard._is_valid_detection(0.40, 0.50) is False)
+    check("person: tiny box rejected",
+          person_guard._is_valid_detection(0.90, 0.01) is False)
+    check("person: boundary values accepted",
+          person_guard._is_valid_detection(0.50, 0.02) is True)
+    check("person: thresholds documented",
+          person_guard.CONFIDENCE_THRESHOLD == 0.5
+          and person_guard.MIN_BOX_AREA_RATIO == 0.02)
+    with mock.patch("person_guard._get_net", return_value=object()):
+        with mock.patch("person_guard._person_boxes", return_value=[(0.92, 0.35)]):
+            check("person: mocked detector hit -> True",
+                  person_guard.person_detected_in_image("/tmp/x.png") is True)
+        with mock.patch("person_guard._person_boxes", return_value=[(0.92, 0.005)]):
+            check("person: mocked tiny detection ignored -> False",
+                  person_guard.person_detected_in_image("/tmp/x.png") is False)
+        with mock.patch("person_guard._person_boxes", return_value=[]):
+            check("person: mocked detector miss -> False",
+                  person_guard.person_detected_in_image("/tmp/x.png") is False)
+    with mock.patch("person_guard._get_net", return_value=None):
+        check("person: net unavailable -> fail open False",
+              person_guard.person_detected_in_image("/tmp/x.png") is False)
+    with mock.patch("person_guard._get_net", side_effect=RuntimeError("boom")):
+        check("person: net crash -> False, no raise",
+              person_guard.person_detected_in_image("/tmp/x.png") is False)
+    with mock.patch("person_guard.model_available", return_value=False):
+        check("person: model missing -> scan False, no download crash",
+              person_guard.scan_photo_paths(["/tmp/x.png"]) is False)
+    check("person: scan skips missing files",
+          person_guard.scan_photo_paths(["/tmp/nope1.png"]) is False)
 
 print(f"\n==== {len(passed)} passed, {len(failed)} failed ====")
 if failed:
