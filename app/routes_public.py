@@ -7,6 +7,10 @@ from flask import Blueprint, render_template, request, Response, abort, url_for
 from urllib.parse import quote
 
 from models import db, Listing, CITIES, PROPERTY_TYPES, Draw
+from punjab_divisions import (
+    DIVISIONS, division_slugs, district_slugs, tehsil_slugs,
+    is_valid_location, division_of_district, locate_tehsil, LEGACY_CITY_MAP,
+)
 
 bp = Blueprint("public", __name__)
 
@@ -20,32 +24,92 @@ def home():
     latest = _approved().order_by(Listing.created_at.desc()).limit(6).all()
     latest_draw = (Draw.query.filter_by(status="drawn")
                   .order_by(Draw.drawn_at.desc()).first())
+    div_counts = {s: _approved().filter_by(division=s).count()
+                  for s in division_slugs()}
     return render_template("public/home.html", listings=latest,
                            latest_winner=latest_draw.winner if latest_draw else None,
-                           latest_prize=latest_draw.prize if latest_draw else "")
+                           latest_prize=latest_draw.prize if latest_draw else "",
+                           div_counts=div_counts)
 
 
 @bp.route("/city/<city>")
 def city_page(city):
-    if city not in CITIES:
+    """District page. Legacy slugs keep working:
+    'chiniot' -> chiniot district; 'lalian'/'bhuwana' -> their tehsil view."""
+    listings = _approved()
+    page_title = city
+    if city in LEGACY_CITY_MAP:
+        div, dist, teh = LEGACY_CITY_MAP[city]
+        if teh != dist:  # legacy tehsil slug -> tehsil-filtered view
+            listings = listings.filter_by(tehsil=teh)
+            page_title = teh
+        else:
+            listings = listings.filter_by(city=dist)
+            page_title = dist
+    elif city in district_slugs():
+        listings = listings.filter_by(city=city)
+        page_title = city
+    else:
+        # maybe a bare tehsil slug
+        tdiv, tdist = locate_tehsil(city)
+        if tdiv:
+            listings = listings.filter_by(tehsil=city)
+            page_title = city
+        else:
+            abort(404)
+    listings = listings.order_by(Listing.created_at.desc()).all()
+    return render_template("public/city.html", city_slug=page_title,
+                           listings=listings)
+
+
+@bp.route("/division/<division>")
+def division_page(division):
+    if division not in DIVISIONS:
         abort(404)
     listings = (
-        _approved().filter_by(city=city).order_by(Listing.created_at.desc()).all()
+        _approved().filter_by(division=division)
+        .order_by(Listing.created_at.desc()).all()
     )
-    return render_template("public/city.html", city_slug=city, listings=listings)
+    counts = {}
+    for dist in DIVISIONS[division]["districts"]:
+        counts[dist] = _approved().filter_by(city=dist).count()
+    return render_template("public/division.html", division=division,
+                           listings=listings, counts=counts)
+
+
+@bp.route("/divisions")
+def divisions_page():
+    divs = []
+    for slug in division_slugs():
+        divs.append({
+            "slug": slug,
+            "count": _approved().filter_by(division=slug).count(),
+        })
+    return render_template("public/divisions.html", divisions=divs)
 
 
 @bp.route("/listings")
 def listings_page():
     q = (request.args.get("q") or "").strip()
-    city = request.args.get("city") or ""
+    division = request.args.get("division") or ""
+    district = request.args.get("district") or ""
+    tehsil = request.args.get("tehsil") or ""
+    city = request.args.get("city") or ""  # legacy district-slug param
     ptype = request.args.get("property_type") or ""
     min_rent = request.args.get("min_rent") or ""
     max_rent = request.args.get("max_rent") or ""
     bedrooms = request.args.get("bedrooms") or ""
 
     query = _approved()
-    if city in CITIES:
+    if division in DIVISIONS:
+        query = query.filter_by(division=division)
+        if district in district_slugs(division):
+            query = query.filter_by(city=district)
+            if tehsil in tehsil_slugs(division, district):
+                query = query.filter_by(tehsil=tehsil)
+    elif district in district_slugs():
+        query = query.filter_by(city=district)
+    elif city in district_slugs():
         query = query.filter_by(city=city)
     if ptype in PROPERTY_TYPES:
         query = query.filter_by(property_type=ptype)
@@ -82,6 +146,9 @@ def listings_page():
         listings=listings,
         filters={
             "q": q,
+            "division": division,
+            "district": district,
+            "tehsil": tehsil,
             "city": city,
             "property_type": ptype,
             "min_rent": min_rent,
@@ -100,11 +167,17 @@ def listing_detail(listing_id):
     # Anti-bypass monitoring: count views (only committed for approved listings).
     listing.view_count = (listing.view_count or 0) + 1
     db.session.commit()
-    # WhatsApp share link: title + rent + city + page URL, pre-encoded.
+    # WhatsApp share link: title + rent + location + page URL, pre-encoded.
+    from punjab_divisions import place_name as _pn, tehsil_name as _tn
     title = listing.title_ur if listing.title_ur else listing.title_en
+    loc_bits = [_pn(listing.city)]
+    if listing.tehsil:
+        loc_bits.append(_tn(listing.tehsil, district=listing.city,
+                            division=listing.division))
+    loc_str = "، ".join(b for b in loc_bits if b)
     share_text = "{} — {} {:,}/{}، {} | {}\n{}".format(
         title, "روپے", listing.monthly_rent or 0, "ماہانہ",
-        listing.city, "کرایہ نامہ", request.url)
+        loc_str, "کرایہ نامہ", request.url)
     share_url = "https://wa.me/?text=" + quote(share_text)
     # Landlord's average rating from completed deals.
     from models import Rating
@@ -125,8 +198,11 @@ def sitemap():
     urls = [
         url_for("public.home", _external=True),
         url_for("public.listings_page", _external=True),
+        url_for("public.divisions_page", _external=True),
     ]
-    for c in CITIES:
+    for d in division_slugs():
+        urls.append(url_for("public.division_page", division=d, _external=True))
+    for c in district_slugs():
         urls.append(url_for("public.city_page", city=c, _external=True))
     for listing in _approved().all():
         urls.append(
