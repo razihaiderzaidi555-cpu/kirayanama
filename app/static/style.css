@@ -250,3 +250,5 @@ img.thumb{width:74px;height:54px;object-fit:cover;border-radius:6px;border:1px s
 .role-pick input{width:20px;height:20px;accent-color:var(--green-dark);
   vertical-align:middle;margin-left:8px}
 .role-pick:has(input:checked){background:#f3e2a0;border-color:var(--green-dark)}
+
+.tm-mark{font-size:.62em;font-weight:400;vertical-align:super;line-height:1;}
