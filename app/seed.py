@@ -53,14 +53,18 @@ LISTINGS = [
 ]
 
 with app.app_context():
-    admin = User(public_id="KN-1", name="Admin", phone="03115021212", role="admin", city="chiniot")
+    admin = User(public_id="KN-1", name="Admin", phone="03115021212", role="admin", city="chiniot",
+                 division="faisalabad", district="chiniot")
     admin.set_password("admin123")
-    ll = User(public_id="KN-1001", name="Malik Ashfaq", phone="03011111111", role="landlord", city="chiniot")
+    ll = User(public_id="KN-1001", name="Malik Ashfaq", phone="03011111111", role="landlord", city="chiniot",
+            division="faisalabad", district="chiniot")
     ll.set_password("landlord123")
-    renter = User(public_id="KN-1002", name="Bilal Ahmed", phone="03022222222", role="renter", city="lalian")
+    renter = User(public_id="KN-1002", name="Bilal Ahmed", phone="03022222222", role="renter", city="lalian",
+                division="faisalabad", district="chiniot")
     renter.set_password("renter123")
     # demo lucky-draw users
-    sana = User(public_id="KN-1003", name="Sana Bibi", phone="03044444444", role="renter", city="chiniot")
+    sana = User(public_id="KN-1003", name="Sana Bibi", phone="03044444444", role="renter", city="chiniot",
+              division="faisalabad", district="chiniot")
     sana.set_password("demo1234")
     db.session.add_all([admin, ll, renter, sana])
     db.session.flush()
@@ -86,9 +90,12 @@ with app.app_context():
     db.session.commit()
 
     _clear_stale_demos()
+    from punjab_divisions import resolve_location
     for i, (tu, te, du, city, area, ptype, br, ba, sqft, rent) in enumerate(LISTINGS):
+        _div, _dist, _teh = resolve_location(city=city)
         l = Listing(landlord_id=ll.id, title_ur=tu, title_en=te, desc_ur=du,
-                    city=city, area=area, exact_address=f"{area}، گلی نمبر {i+1}، مکان نمبر {10+i}",
+                    city=_dist, division=_div, tehsil=_teh,
+                    area=area, exact_address=f"{area}، گلی نمبر {i+1}، مکان نمبر {10+i}",
                     property_type=ptype, bedrooms=br,
                     bathrooms=ba, area_sqft=sqft, monthly_rent=rent, status="approved")
         db.session.add(l)
