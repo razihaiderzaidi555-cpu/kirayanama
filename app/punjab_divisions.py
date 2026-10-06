@@ -10,6 +10,8 @@ Structure: DIVISIONS[division_slug] = {
 """
 from __future__ import annotations
 
+import os
+
 DIVISIONS = {
     "lahore": {"ur": "لاہور", "en": "Lahore", "districts": {
         "lahore": {"ur": "لاہور", "en": "Lahore", "tehsils": [
@@ -276,9 +278,28 @@ LEGACY_CITY_MAP = {
     "bhuwana": ("faisalabad", "chiniot", "bhuwana"),
 }
 
+# Display order for division cards (Razi's order: Faisalabad, Lahore, Sargodha
+# first, then the rest by population).
+DISPLAY_ORDER = [
+    "faisalabad", "lahore", "sargodha", "rawalpindi", "multan",
+    "gujranwala", "bahawalpur", "dera-ghazi-khan", "sahiwal", "gujrat",
+]
+
+_FALLBACK_CARD_IMAGE = "images/house-3.jpg"
+
+
+def division_image(slug):
+    """Static path of the division's landmark card image, or a fallback."""
+    rel = "img/divisions/%s.jpg" % slug
+    here = os.path.dirname(os.path.abspath(__file__))
+    if os.path.exists(os.path.join(here, "static", rel)):
+        return rel
+    return _FALLBACK_CARD_IMAGE
+
 
 def division_slugs():
-    return list(DIVISIONS.keys())
+    return [s for s in DISPLAY_ORDER if s in DIVISIONS] + \
+        [s for s in DIVISIONS.keys() if s not in DISPLAY_ORDER]
 
 
 def division_name(slug, lang="ur"):
