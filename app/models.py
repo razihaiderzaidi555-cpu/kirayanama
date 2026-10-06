@@ -4,9 +4,13 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 
+from punjab_divisions import district_slugs
+
 db = SQLAlchemy()
 
-CITIES = ["chiniot", "lalian", "bhuwana"]
+# All Punjab district slugs (Division -> District -> Tehsil model).
+# Listing.city / legacy User.city values resolve through resolve_location().
+CITIES = sorted(district_slugs())
 PROPERTY_TYPES = ["house", "shop", "portion", "room"]
 LISTING_STATUS = ["pending", "approved", "rejected"]
 REQUEST_STATUS = ["pending_yes", "awaiting_payment", "in_review", "unlocked",
@@ -26,7 +30,9 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), nullable=True)  # for OTP recovery + notifications
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default="renter")  # landlord/renter/dealer/admin
-    city = db.Column(db.String(40), default="")
+    city = db.Column(db.String(40), default="")  # tehsil slug (legacy: old flat city slug)
+    division = db.Column(db.String(40), default="")  # division slug
+    district = db.Column(db.String(40), default="")  # district slug
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_active = db.Column(db.Boolean, default=True)
     # referral system (lucky draw)
@@ -60,7 +66,9 @@ class Listing(db.Model):
     title_en = db.Column(db.String(200), nullable=False, default="")
     desc_ur = db.Column(db.Text, nullable=False, default="")
     desc_en = db.Column(db.Text, nullable=False, default="")
-    city = db.Column(db.String(40), nullable=False)  # chiniot/lalian/bhuwana
+    city = db.Column(db.String(40), nullable=False)  # DISTRICT slug (legacy: old flat city slug)
+    division = db.Column(db.String(40), nullable=True)  # division slug
+    tehsil = db.Column(db.String(40), nullable=True)  # tehsil slug
     area = db.Column(db.String(120), default="")  # mohalla/society — PUBLIC
     exact_address = db.Column(db.String(255), default="")  # street/house no — MASKED until unlock
     # map pin set by landlord AFTER the deal unlocks; shown to the renter of that deal only
