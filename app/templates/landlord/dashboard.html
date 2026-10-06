@@ -62,6 +62,12 @@
             {% else %}
               <span class="badge badge-yellow">{{ t('status_pending') }}</span>
             {% endif %}
+            {% if l.photo_status == 'pending' %}
+              <br><small class="muted">📷 {{ t('photo_review_title') }}: {{ t('status_pending') }}</small>
+            {% elif l.photo_status == 'rejected' %}
+              <br><small class="muted">📷 {{ t('photo_review_title') }}: {{ t('status_rejected') }}</small>
+              {% if l.rejection_reason and l.status != 'rejected' %}<br><small class="muted">{{ t('rejection_reason_label') }}: {{ l.rejection_reason }}</small>{% endif %}
+            {% endif %}
           </td>
           <td>
             <a class="btn btn-small btn-secondary" href="{{ url_for('landlord.listing_edit', listing_id=l.id) }}">{{ t('edit_listing') }}</a>
