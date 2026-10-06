@@ -90,14 +90,14 @@ with app.app_context():
 print("5 OK: landlord YES -> awaiting_payment, commission=3000")
 
 # 6. both upload blank screenshots -> needs_review (OCR can't auto-verify blanks)
-r = c.post(f"/request/{rid}/payment", data={"screenshot": (png(), "pay.png")},
+r = c.post(f"/request/{rid}/payment", data={"tid": "77778888", "screenshot": (png(), "pay.png")},
            content_type="multipart/form-data", follow_redirects=True)
 assert r.status_code == 200
 with app.app_context():
     assert ContactRequest.query.get(rid).landlord_shot, "landlord shot saved"
 c.get("/logout")
 c.post("/login", data={"phone": "03022222222", "password": "pass1234"})
-r = c.post(f"/request/{rid}/payment", data={"screenshot": (png(), "pay2.png")},
+r = c.post(f"/request/{rid}/payment", data={"tid": "99990000", "screenshot": (png(), "pay2.png")},
            content_type="multipart/form-data", follow_redirects=True)
 assert r.status_code == 200
 with app.app_context():
