@@ -488,14 +488,18 @@ with app.app_context():
     cr1 = _mkdeal(15000)  # commission = 2250
     client.get("/logout")
     client.post("/login", data={"phone": "03000000003", "password": "rt123456"})
+    # typed TID takes precedence over OCR-extracted trx for the claim
     with mock.patch("routes_contact.verify_payment_screenshot",
                     return_value=(True, "TRXAAA111", "")):
         r = client.post(f"/request/{cr1.id}/payment",
-                        data={"screenshot": _shot()},
+                        data={"tid": "11111111", "screenshot": _shot()},
                         content_type="multipart/form-data", follow_redirects=True)
     c1 = ContactRequest.query.get(cr1.id)
     check("pay: renter auto-verified", c1.renter_verified is True)
-    check("pay: trx claimed in UsedTrx", UsedTrx.query.get("TRXAAA111") is not None)
+    check("pay: typed tid claimed in UsedTrx",
+          UsedTrx.query.get("11111111") is not None)
+    check("pay: typed tid beats OCR trx",
+          UsedTrx.query.get("TRXAAA111") is None)
     check("pay: one side only -> awaiting_payment", c1.status == "awaiting_payment")
     check("pay: auto flash shown", "خودکار تصدیق" in r.data.decode())
 
@@ -504,32 +508,67 @@ with app.app_context():
     with mock.patch("routes_contact.verify_payment_screenshot",
                     return_value=(True, "TRXBBB222", "")):
         client.post(f"/request/{cr1.id}/payment",
-                    data={"screenshot": _shot()},
+                    data={"tid": "22222222", "screenshot": _shot()},
                     content_type="multipart/form-data", follow_redirects=True)
     c1 = ContactRequest.query.get(cr1.id)
     check("pay: both sides auto -> unlocked", c1.status == "unlocked")
     check("pay: verified_at set", c1.verified_at is not None)
 
-    # replay: same trx on another deal
-    cr2 = _mkdeal(15000)
+    # TID format validation: letters rejected
+    cr5 = _mkdeal(15000)
     client.get("/logout")
     client.post("/login", data={"phone": "03000000003", "password": "rt123456"})
-    with mock.patch("routes_contact.verify_payment_screenshot",
-                    return_value=(True, "TRXAAA111", "")):
-        client.post(f"/request/{cr2.id}/payment",
+    r = client.post(f"/request/{cr5.id}/payment",
+                    data={"tid": "abc", "screenshot": _shot()},
+                    content_type="multipart/form-data", follow_redirects=True)
+    c5 = ContactRequest.query.get(cr5.id)
+    check("pay: bad tid format -> Urdu error", "8 سے 20" in r.data.decode())
+    check("pay: bad tid -> nothing saved", c5.renter_shot is None)
+    check("pay: bad tid -> status unchanged",
+          c5.status == "awaiting_payment")
+    # too short
+    r = client.post(f"/request/{cr5.id}/payment",
+                    data={"tid": "12345", "screenshot": _shot()},
+                    content_type="multipart/form-data", follow_redirects=True)
+    check("pay: short tid rejected", "8 سے 20" in r.data.decode()
+          and ContactRequest.query.get(cr5.id).renter_shot is None)
+    # missing tid entirely
+    r = client.post(f"/request/{cr5.id}/payment",
                     data={"screenshot": _shot()},
                     content_type="multipart/form-data", follow_redirects=True)
-    c2 = ContactRequest.query.get(cr2.id)
-    check("pay: replay trx -> needs_review", c2.status == "needs_review")
-    check("pay: replay trx -> not verified", c2.renter_verified is not True)
-    check("pay: replay reason recorded", c2.renter_review_reason == "trx_reused")
+    check("pay: missing tid rejected", "8 سے 20" in r.data.decode())
 
-    # amount mismatch
+    # TID reuse across deals -> Urdu error, upload not even saved
+    cr2 = _mkdeal(15000)
+    with mock.patch("routes_contact.verify_payment_screenshot",
+                    return_value=(True, "TRXZZZ999", "")) as mv:
+        r = client.post(f"/request/{cr2.id}/payment",
+                        data={"tid": "11111111", "screenshot": _shot()},
+                        content_type="multipart/form-data", follow_redirects=True)
+    c2 = ContactRequest.query.get(cr2.id)
+    check("pay: reused tid -> Urdu error", "پہلے استعمال" in r.data.decode())
+    check("pay: reused tid -> nothing saved", c2.renter_shot is None)
+    check("pay: reused tid -> status unchanged",
+          c2.status == "awaiting_payment")
+    check("pay: reused tid -> OCR never ran", mv.call_count == 0)
+
+    # Urdu digits in TID accepted (normalized)
+    with mock.patch("routes_contact.verify_payment_screenshot",
+                    return_value=(True, "TRXUUU1", "")):
+        client.post(f"/request/{cr2.id}/payment",
+                    data={"tid": "۱۲۳۴۵۶۷۸", "screenshot": _shot()},
+                    content_type="multipart/form-data", follow_redirects=True)
+    c2 = ContactRequest.query.get(cr2.id)
+    check("pay: urdu-digit tid accepted", c2.renter_verified is True)
+    check("pay: urdu-digit tid normalized",
+          UsedTrx.query.get("12345678") is not None)
+
+    # amount mismatch (valid tid, OCR fails amount)
     cr3 = _mkdeal(15000)
     with mock.patch("routes_contact.verify_payment_screenshot",
                     return_value=(False, None, "amount_mismatch")):
         client.post(f"/request/{cr3.id}/payment",
-                    data={"screenshot": _shot()},
+                    data={"tid": "33333333", "screenshot": _shot()},
                     content_type="multipart/form-data", follow_redirects=True)
     c3 = ContactRequest.query.get(cr3.id)
     check("pay: mismatch -> needs_review", c3.status == "needs_review")
@@ -541,7 +580,7 @@ with app.app_context():
     with mock.patch("routes_contact.verify_payment_screenshot",
                     side_effect=RuntimeError("boom")):
         r = client.post(f"/request/{cr4.id}/payment",
-                        data={"screenshot": _shot()},
+                        data={"tid": "44444444", "screenshot": _shot()},
                         content_type="multipart/form-data", follow_redirects=True)
         check("pay: guard crash -> no 500", r.status_code in (200, 302))
     c4 = ContactRequest.query.get(cr4.id)
@@ -552,28 +591,41 @@ with app.app_context():
     with mock.patch("routes_contact.verify_payment_screenshot",
                     return_value=(True, "TRXCCC333", "")):
         client.post(f"/request/{cr4.id}/payment",
-                    data={"screenshot": _shot()},
+                    data={"tid": "55555555", "screenshot": _shot()},
                     content_type="multipart/form-data", follow_redirects=True)
     c4 = ContactRequest.query.get(cr4.id)
     check("pay: reupload -> verified", c4.renter_verified is True)
     check("pay: reupload -> awaiting_payment", c4.status == "awaiting_payment")
 
-    # request page renders in needs_review with re-upload hint
+    # request page: TID input + SLA line + re-upload hint
     r = client.get(f"/request/{cr3.id}")
     check("pay: request page 200 on needs_review", r.status_code == 200)
     check("pay: reupload hint shown", "دوبارہ اپ لوڈ" in r.data.decode())
+    check("pay: tid input rendered", 'name="tid"' in r.data.decode())
+    check("pay: SLA line shown", "24 گھنٹے" in r.data.decode())
 
     # admin queue lists needs_review + manual verify/reject still work
     client.get("/logout")
     client.post("/login", data={"phone": "03000000001", "password": "admin123"})
     r = client.get("/admin/payments")
     check("pay: admin queue lists needs_review", "ڈیل ٹیسٹ" in r.data.decode())
-    r = client.post(f"/admin/payments/{cr2.id}/verify", follow_redirects=True)
+    r = client.post(f"/admin/payments/{cr3.id}/verify", follow_redirects=True)
     check("pay: admin manual verify on needs_review",
-          ContactRequest.query.get(cr2.id).status == "unlocked")
-    r = client.post(f"/admin/payments/{cr3.id}/reject", follow_redirects=True)
+          ContactRequest.query.get(cr3.id).status == "unlocked")
+    cr6 = _mkdeal(15000)
+    client.get("/logout")
+    client.post("/login", data={"phone": "03000000003", "password": "rt123456"})
+    with mock.patch("routes_contact.verify_payment_screenshot",
+                    return_value=(False, None, "identifier_missing")):
+        client.post(f"/request/{cr6.id}/payment",
+                    data={"tid": "66666666", "screenshot": _shot()},
+                    content_type="multipart/form-data", follow_redirects=True)
+    check("pay: cr6 needs_review", ContactRequest.query.get(cr6.id).status == "needs_review")
+    client.get("/logout")
+    client.post("/login", data={"phone": "03000000001", "password": "admin123"})
+    r = client.post(f"/admin/payments/{cr6.id}/reject", follow_redirects=True)
     check("pay: admin reject on needs_review",
-          ContactRequest.query.get(cr3.id).status == "rejected")
+          ContactRequest.query.get(cr6.id).status == "rejected")
 
 print(f"\n==== {len(passed)} passed, {len(failed)} failed ====")
 if failed:
