@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}{{ t('city_' + city_slug + '_seo') }} | {{ t('app_name') }}{% endblock %}
+{% block title %}{{ place_name(city_slug) }} میں کرائے کے مکانات | {{ t('app_name') }}{% endblock %}
 {% block extra_head %}
-<meta name="description" content="{{ t('city_' + city_slug + '_seo') }} — {{ t('seo_home_desc') }}">
+<meta name="description" content="{{ place_name(city_slug) }} میں کرائے کے مکانات — {{ t('seo_home_desc') }}">
 {% endblock %}
 {% block content %}
-<h1>📍 {{ t('city_' + city_slug + '_seo') }}</h1>
+<h1>📍 {{ place_name(city_slug) }} میں کرائے کے مکانات</h1>
 <div class="grid grid-3">
 {% for l in listings %}
   {% set ph = l.primary_photo %}
@@ -14,7 +14,7 @@
       <h3><a href="{{ url_for('public.listing_detail', listing_id=l.id) }}">{{ l.title_ur if lang=='ur' else (l.title_en or l.title_ur) }}</a></h3>
       {% if l.landlord and l.landlord.is_dealer() and l.landlord.dealer_verified %}<p><span class="badge badge-green">{{ t('dealer_badge') }}</span></p>{% endif %}
       <p class="rent">{{ t('rs') }} {{ "{:,}".format(l.monthly_rent) }} / {{ t('per_month') }}</p>
-      <p class="muted">{% if l.area %}{{ l.area }} — {% endif %}{{ t('type_' + l.property_type) }}</p>
+      <p class="muted">{% if l.tehsil %}{{ tehsil_name(l.tehsil) }} — {% endif %}{% if l.area %}{{ l.area }} — {% endif %}{{ t('type_' + l.property_type) }}</p>
     </div>
   </div>
 {% else %}
