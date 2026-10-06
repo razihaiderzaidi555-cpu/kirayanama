@@ -55,5 +55,11 @@
 {% else %}
   <p class="alert">{{ t('login_required') }} <a href="{{ url_for('auth.login') }}">{{ t('nav_login') }}</a></p>
 {% endif %}
-<p style="margin-top:1em"><a class="btn btn-whatsapp" href="{{ share_url }}" target="_blank" rel="noopener">📲 {{ t('share_whatsapp') }}</a></p>
+<p style="margin-top:1em"><a class="btn btn-whatsapp" href="{{ share_url }}" target="_blank" rel="noopener">📲 {{ t('share_whatsapp') }}</a>
+{% if current_user.is_authenticated %}
+<form action="{{ url_for('public.report_photo', listing_id=listing.id) }}" method="post" style="display:inline;margin-right:.5em">
+  <button type="submit" class="btn btn-small">🚩 {{ t('report_photo') }}</button>
+</form>
+{% endif %}
+</p>
 {% endblock %}
