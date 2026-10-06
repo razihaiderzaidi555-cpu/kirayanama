@@ -76,6 +76,10 @@ class Listing(db.Model):
     location_lng = db.Column(db.Float, nullable=True)
     # landlord closed the listing after renting out — hidden from public browse
     is_closed = db.Column(db.Boolean, default=False)
+    # photo review queue (anti commission-bypass): photos must be approved
+    # before the listing is publicly visible. 'pending'|'approved'|'rejected'
+    photo_status = db.Column(db.String(20), default="pending")
+    photo_flag = db.Column(db.String(40), default="")  # e.g. 'phone_detected'
     property_type = db.Column(db.String(20), default="house")
     bedrooms = db.Column(db.Integer, default=0)
     bathrooms = db.Column(db.Integer, default=0)
