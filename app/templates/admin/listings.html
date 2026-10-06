@@ -7,7 +7,7 @@
   <img class="listing-img" src="{{ url_for('static', filename='uploads/listings/' + pp.filename) }}" alt="">
   {% endif %}
   <h3>{{ l.title_ur if lang == 'ur' else l.title_en }}</h3>
-  <p class="muted">{{ t('city') }}: {{ city_name(l.city) }} &middot; {{ t('monthly_rent') }}: {{ t('rs') }} {{ l.monthly_rent }} {{ t('per_month') }}</p>
+  <p class="muted">{{ t('district') }}: {{ district_name(l.city) }}{% if l.tehsil %}، {{ tehsil_name(l.tehsil) }}{% endif %} &middot; {{ t('monthly_rent') }}: {{ t('rs') }} {{ l.monthly_rent }} {{ t('per_month') }}</p>
   {% if l.exact_address %}<p class="muted"><small>{{ t('exact_address') }}: {{ l.exact_address }}</small></p>{% endif %}
   {% if l.landlord and l.landlord.is_dealer() %}
   <p><small>{{ t('role_dealer') }}: {{ l.landlord.name }}{% if l.landlord.dealer_verified %} — {{ t('dealer_badge') }}{% endif %} ({{ t('dealer_share_label') }}: {{ l.landlord.dealer_share }}%)</small></p>
