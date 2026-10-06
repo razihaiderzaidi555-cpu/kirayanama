@@ -26,7 +26,7 @@
           <td>{{ u.name }}</td>
           <td>{{ u.phone }}</td>
           <td>{% if u.role == 'landlord' %}{{ t('role_landlord') }}{% elif u.role == 'renter' %}{{ t('role_renter') }}{% elif u.role == 'dealer' %}{{ t('role_dealer') }}{% if u.dealer_verified %} {{ t('dealer_badge') }}{% endif %}{% else %}{{ t('role_admin') }}{% endif %}</td>
-          <td>{{ u.city }}</td>
+          <td>{% if u.district %}{{ district_name(u.district) }}{% if u.city %}، {{ tehsil_name(u.city) }}{% endif %}{% else %}{{ place_name(u.city) }}{% endif %}</td>
           <td>{{ u.created_at.strftime('%Y-%m-%d') if u.created_at else '' }}</td>
           <td>
             {% if u.is_active %}<span class="badge badge-green">{{ t('status_active') }}</span>
