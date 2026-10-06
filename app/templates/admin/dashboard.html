@@ -15,6 +15,11 @@
       <a class="btn btn-secondary btn-small" href="{{ url_for('admin.listings') }}">{{ t('view') }}</a>
     </div>
     <div class="card">
+      <h3>📷 {{ stats.pending_photos }}</h3>
+      <p>{{ t('photo_review_title') }}</p>
+      <a class="btn btn-secondary btn-small" href="{{ url_for('admin.photo_review') }}">{{ t('view') }}</a>
+    </div>
+    <div class="card">
       <h3>{{ stats.in_review }}</h3>
       <p>{{ t('review_requests') }}</p>
       <a class="btn btn-secondary btn-small" href="{{ url_for('admin.payments') }}">{{ t('view') }}</a>
