@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}{{ place_name(city_slug) }} میں کرائے کے مکانات | {{ t('app_name') }}{% endblock %}
+{% block title %}{% if lang == 'ur' %}{{ place_name(city_slug) }} میں کرائے کے مکانات{% else %}Houses for rent in {{ place_name(city_slug, 'en') }}{% endif %} | {{ t('app_name') }}{% endblock %}
 {% block extra_head %}
-<meta name="description" content="{{ place_name(city_slug) }} میں کرائے کے مکانات — {{ t('seo_home_desc') }}">
+<meta name="description" content="{% if lang == 'ur' %}{{ place_name(city_slug) }} میں کرائے کے مکانات{% else %}Houses for rent in {{ place_name(city_slug, 'en') }}{% endif %} — {{ t('seo_home_desc') }}">
 {% endblock %}
 {% block content %}
-<h1>📍 {{ place_name(city_slug) }} میں کرائے کے مکانات</h1>
+<h1>📍 {% if lang == 'ur' %}{{ place_name(city_slug) }} میں کرائے کے مکانات{% else %}Houses for rent in {{ place_name(city_slug, 'en') }}{% endif %}</h1>
 {% if tehsils %}
 <h2 class="section-title">{{ t('filter_tehsil') }}</h2>
 <div class="chips chips-big">
