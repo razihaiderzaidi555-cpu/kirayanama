@@ -109,13 +109,17 @@ def extract_trx_id(text):
     return None
 
 
-def verify_payment_screenshot(image_path, expected_amount, identifiers):
+def verify_payment_screenshot(image_path, expected_amount, identifiers,
+                              require_trx_id=True):
     """Verify one payment screenshot.
 
-    Returns (ok, trx_id, reason): ok=True only when amount + identifier +
-    fresh transaction ID all hold. Never raises — any failure, including an
-    OCR crash, returns ok=False with a reason code (fail-open to manual
-    review).
+    Returns (ok, trx_id, reason): ok=True only when amount + identifier hold
+    (and a transaction ID is found when require_trx_id=True). The caller may
+    pass a user-typed TID for the UsedTrx uniqueness check — the typed TID
+    always takes precedence over the OCR-extracted one.
+
+    Never raises — any failure, including an OCR crash, returns ok=False
+    with a reason code (fail-open to manual review).
     """
     try:
         text = ocr_text(image_path)
@@ -129,7 +133,7 @@ def verify_payment_screenshot(image_path, expected_amount, identifiers):
     if not find_identifier(text, identifiers):
         return False, None, "identifier_missing"
     trx = extract_trx_id(text)
-    if not trx:
+    if require_trx_id and not trx:
         return False, None, "trx_missing"
     return True, trx, ""
 
