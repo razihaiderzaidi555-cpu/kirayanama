@@ -57,6 +57,9 @@
     <div class="card">
       <h3>👁️ {{ stats.visitors_total }}</h3>
       <p>{{ t('admin_visitors') }} — {{ t('visitors_today') }}: {{ stats.visitors_today }} | {{ t('visitors_week') }}: {{ stats.visitors_week }}</p>
+      <form method="post" action="{{ url_for('admin.visitors_reset') }}" onsubmit="return confirm('{{ t('confirm_reset_visitors') }}');">
+        <button type="submit" class="btn btn-small btn-danger">{{ t('reset_visitors') }}</button>
+      </form>
     </div>
   </div>
 </div>
