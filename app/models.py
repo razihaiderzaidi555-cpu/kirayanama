@@ -13,8 +13,8 @@ db = SQLAlchemy()
 CITIES = sorted(district_slugs())
 PROPERTY_TYPES = ["house", "shop", "portion", "room"]
 LISTING_STATUS = ["pending", "approved", "rejected"]
-REQUEST_STATUS = ["pending_yes", "awaiting_payment", "in_review", "unlocked",
-                  "rejected", "cancelled"]
+REQUEST_STATUS = ["pending_yes", "awaiting_payment", "in_review", "needs_review",
+                  "unlocked", "rejected", "cancelled"]
 COMMISSION_RATE = 0.15  # per side; platform total = 30% of monthly rent
 DEALER_DEFAULT_SHARE = 5.0  # percentage POINTS of rent paid to dealer on their deals
 SUSPICIOUS_MIN_VIEWS = 20  # views with zero unlocks -> flag listing
@@ -124,6 +124,13 @@ class ContactRequest(db.Model):
     landlord_shot = db.Column(db.String(255), nullable=True)
     renter_paid_at = db.Column(db.DateTime, nullable=True)
     landlord_paid_at = db.Column(db.DateTime, nullable=True)
+    # automatic payment verification (payment_guard): per-side auto-approval
+    # state. A side that fails OCR checks goes to 'needs_review' with a
+    # reason code (rendered via t('reason_' + code)) instead of blocking.
+    renter_verified = db.Column(db.Boolean, default=False)
+    landlord_verified = db.Column(db.Boolean, default=False)
+    renter_review_reason = db.Column(db.String(40), default="")
+    landlord_review_reason = db.Column(db.String(40), default="")
     verified_at = db.Column(db.DateTime, nullable=True)
     cancelled_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -147,6 +154,20 @@ class ContactRequest(db.Model):
         if not owner or not owner.is_dealer():
             return 0
         return int(round((self.listing.monthly_rent or 0) * (owner.dealer_share or 0) / 100.0))
+
+
+class UsedTrx(db.Model):
+    """Transaction IDs already claimed by an auto-verified payment.
+
+    Kills replay fraud: the same payment screenshot (same TrxID) can never
+    unlock two deals or cover both sides of one deal.
+    """
+    __tablename__ = "used_trx"
+    trx_id = db.Column(db.String(64), primary_key=True)
+    contact_request_id = db.Column(db.Integer, db.ForeignKey("contact_requests.id"),
+                                   nullable=False)
+    side = db.Column(db.String(10), nullable=False, default="")  # renter/landlord
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class Setting(db.Model):
