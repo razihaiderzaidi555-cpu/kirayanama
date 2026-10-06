@@ -2,9 +2,9 @@
 {% block title %}{{ t('divisions_title') }} | {{ t('app_name') }}{% endblock %}
 {% block content %}
 <h1>{{ t('divisions_title') }}</h1>
-<div class="grid grid-3">
+<div class="grid grid-2">
   {% for d in divisions %}
-  <a class="card city-card" href="{{ url_for('public.division_page', division=d.slug) }}" style="text-decoration:none">
+  <a class="card city-card" href="{{ url_for('public.division_page', division=d.slug) }}" style="text-decoration:none;background-image:url('{{ url_for('static', filename=division_image(d.slug)) }}')">
     <div class="pad"><h3>📍 {{ division_name(d.slug) }}</h3>
     <p class="muted">{{ d.count }} {{ t('featured') }}</p></div>
   </a>
