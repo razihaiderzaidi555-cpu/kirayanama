@@ -18,7 +18,7 @@ def get_text(key, lang="ur"):
 
 TRANSLATIONS = {
     "ur": {
-        "app_name": "کرایہ نامہ™",
+        "app_name": "کرایہ نامہ",
         "tagline": "مکان کرائے پر لینا/دینا — نہ ٹوکن، نہ ایڈوانس، صرف ڈیل پکی ہونے پر کمیشن۔",
         "mission_line": "📢 کرایہ نامہ کا اصل مقصد — آپ کو ایک آسان پلیٹ فارم دینا! مکان، دکان یا کوئی بھی چیز کرائے پر دینی ہو یا لینی ہو، یہاں سے آسانی سے رابطہ کریں۔",
         "nav_home": "ہوم",
@@ -182,7 +182,7 @@ TRANSLATIONS = {
         "decided_recently": "حالیہ فیصلے",
     },
     "en": {
-        "app_name": "KirayaNama™",
+        "app_name": "KirayaNama",
         "tagline": "Renting a house — no token, no advance, commission only when the deal is done.",
         "mission_line": "📢 Kirayanama's mission — one easy platform for everyone! Whether you want to rent out your house, shop, or anything — or you need one — connect easily right here.",
         "nav_home": "Home",
