@@ -3,10 +3,13 @@
 Only approved listings are ever visible here. No landlord phone numbers
 are exposed on any public page (the contact flow lives in routes_contact).
 """
-from flask import Blueprint, render_template, request, Response, abort, url_for
+from flask import Blueprint, render_template, request, Response, abort, url_for, \
+    redirect, flash, g
+from flask_login import login_required
 from urllib.parse import quote
 
 from models import db, Listing, CITIES, PROPERTY_TYPES, Draw
+from translations import get_text
 from punjab_divisions import (
     DIVISIONS, division_slugs, district_slugs, tehsil_slugs,
     is_valid_location, division_of_district, locate_tehsil, LEGACY_CITY_MAP,
@@ -205,6 +208,22 @@ def listing_detail(listing_id):
     return render_template("public/detail.html", listing=listing,
                            share_url=share_url, avg_rating=avg_rating,
                            rating_count=len(_ratings))
+
+
+@bp.route("/listing/<int:listing_id>/report-photo", methods=["POST"])
+@login_required
+def report_photo(listing_id):
+    """A viewer flags a listing's photo as inappropriate.
+
+    The listing is hidden (photo_status='pending') until an admin clears the
+    flag on the /admin/photos page. Login required to prevent report spam.
+    """
+    listing = Listing.query.get_or_404(listing_id)
+    listing.photo_flag = "user_reported"
+    listing.photo_status = "pending"
+    db.session.commit()
+    flash(get_text("report_photo_done", getattr(g, "lang", "ur")))
+    return redirect(url_for("public.listings_page"))
 
 
 @bp.route("/sharait-o-zawabit")
