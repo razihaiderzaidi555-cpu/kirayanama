@@ -8,9 +8,9 @@
 <h2 class="section-title">{{ t('filter_district') }}</h2>
 <div class="grid grid-3">
   {% for dist, cnt in counts.items() %}
-  <div class="card"><div class="pad">
-    <h3><a href="{{ url_for('public.city_page', city=dist) }}" style="text-decoration:none">📍 {{ district_name(dist) }}</a></h3>
-    <p class="muted">{{ cnt }} {{ t('featured') }}</p>
+  <div class="card city-card" style="background-image:url('{{ url_for('static', filename=district_image(dist)) }}')"><div class="pad">
+    <h3><a href="{{ url_for('public.city_page', city=dist) }}" style="text-decoration:none;color:#fff">📍 {{ district_name(dist) }}</a></h3>
+    <p>{{ cnt }} {{ t('featured') }}</p>
     <div class="chips">
       {% for teh in dist_tehsils.get(dist, []) %}
       <a class="chip" href="{{ url_for('public.city_page', city=teh[0]) }}">{{ tehsil_name(teh[0]) }}</a>
