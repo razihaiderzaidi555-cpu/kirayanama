@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ t('profile_title') }}{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="card">
+    <h1>{{ t('profile_title') }}</h1>
+    <p class="muted">{{ t('your_id') }}: <strong>{{ current_user.public_id }}</strong> · {{ current_user.phone }}</p>
+    <form method="post" action="{{ url_for('auth.profile') }}">
+      <div class="form-group">
+        <label for="email">{{ t('email') }}</label>
+        <input id="email" name="email" type="email"
+               value="{{ current_user.email or '' }}">
+        <small class="muted">{{ t('email_hint') }}</small>
+      </div>
+      <button class="btn btn-primary" type="submit">{{ t('save') }}</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
