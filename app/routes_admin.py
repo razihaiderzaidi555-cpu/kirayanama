@@ -1,13 +1,13 @@
 """W4 admin blueprint. Routes: /admin (dashboard), /admin/users,
 /admin/listings, /admin/payments, /admin/settings, /admin/monitoring + POST actions."""
 from functools import wraps
-from datetime import datetime
 import os
 
 from models import (db, User, Listing, ContactRequest, Setting, get_setting,
                     SUSPICIOUS_MIN_VIEWS, SUSPICIOUS_MIN_CANCELLATIONS,
-                    Draw, TokenLedger, token_balance, award_tokens, TOKEN_DEAL_ENTRY)
+                    Draw, TokenLedger, token_balance)
 from routes_lucky import run_weighted_draw
+from payment_guard import unlock_request
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, g, send_file, current_app
 from flask_login import login_required, current_user
 from translations import get_text
@@ -35,7 +35,8 @@ def dashboard():
     stats = {
         "users": User.query.count(),
         "pending_listings": Listing.query.filter_by(status="pending").count(),
-        "in_review": ContactRequest.query.filter_by(status="in_review").count(),
+        "in_review": ContactRequest.query.filter(
+            ContactRequest.status.in_(["in_review", "needs_review"])).count(),
         "unlocked": ContactRequest.query.filter_by(status="unlocked").count(),
         "approved_listings": Listing.query.filter_by(status="approved").count(),
         "pending_photos": Listing.query.filter_by(photo_status="pending").count(),
@@ -212,7 +213,10 @@ def reject_photos(lid):
 @bp.route("/payments")
 @admin_required
 def payments():
-    queue = (ContactRequest.query.filter_by(status="in_review")
+    """Manual review queue: 'in_review' (legacy) + 'needs_review' (OCR could
+    not auto-verify — shows the reason code per side). Compact by design."""
+    queue = (ContactRequest.query
+             .filter(ContactRequest.status.in_(["in_review", "needs_review"]))
              .order_by(ContactRequest.created_at.desc()).all())
     recent = (ContactRequest.query.filter(ContactRequest.status.in_(["unlocked", "rejected"]))
               .order_by(ContactRequest.created_at.desc()).limit(10).all())
@@ -223,23 +227,9 @@ def payments():
 @admin_required
 def verify_payment(rid):
     req = ContactRequest.query.get_or_404(rid)
-    if req.status == "in_review":
-        req.status = "unlocked"
-        req.verified_at = datetime.utcnow()
-        # Snapshot dealer economics at unlock time.
-        owner = req.listing.landlord if req.listing else None
-        if owner and owner.is_dealer() and owner.is_active:
-            req.dealer_id = owner.id
-            req.dealer_earning = req.dealer_cut
-        # Lucky-draw hook: both sides earn free tokens on a completed deal.
-        award_tokens(req.renter_id, TOKEN_DEAL_ENTRY, "deal_entry")
-        award_tokens(req.landlord_id, TOKEN_DEAL_ENTRY, "deal_entry")
+    if req.status in ("in_review", "needs_review"):
+        unlock_request(req)  # dealer snapshot + tokens + notify included
         db.session.commit()
-        try:
-            from mailer import notify_unlocked
-            notify_unlocked(req)
-        except Exception:
-            pass
         flash(_t("verified_msg"))
     return redirect(url_for("admin.payments"))
 
@@ -248,7 +238,7 @@ def verify_payment(rid):
 @admin_required
 def reject_payment(rid):
     req = ContactRequest.query.get_or_404(rid)
-    if req.status == "in_review":
+    if req.status in ("in_review", "needs_review"):
         req.status = "rejected"
         db.session.commit()
         flash(_t("rejected_msg"))
