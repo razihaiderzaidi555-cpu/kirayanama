@@ -361,6 +361,18 @@ TRANSLATIONS["ur"].update({
     "st_in_review": "تصدیق کے منتظر",
     "st_unlocked": "نمبر موصول",
     "st_rejected": "مسترد",
+    "st_needs_review": "نظرثانی کے منتظر",
+    # automatic payment verification (2026-10-06)
+    "shot_auto_verified": "آپ کی ادائیگی کی خودکار تصدیق ہو گئی ✅",
+    "shot_needs_review": "خودکار تصدیق نہیں ہو سکی — اسکرین شاٹ نظرثانی کے لیے بھیج دیا گیا ہے۔ درست اسکرین شاٹ دوبارہ اپ لوڈ کر سکتے ہیں۔",
+    "auto_verified_badge": "✓ خودکار تصدیق ہو گئی",
+    "reupload_hint": "خودکار تصدیق ناکام — براہ کرم درست اسکرین شاٹ دوبارہ اپ لوڈ کریں",
+    "reason_amount_mismatch": "رقم کمیشن سے میل نہیں کھائی",
+    "reason_identifier_missing": "ہمارا نمبر/اکاؤنٹ اسکرین شاٹ میں نظر نہیں آیا",
+    "reason_trx_missing": "ٹرانزیکشن آئی ڈی نہیں ملی",
+    "reason_trx_reused": "یہ ٹرانزیکشن پہلے استعمال ہو چکی ہے",
+    "reason_ocr_error": "اسکرین شاٹ پڑھا نہیں جا سکا",
+    "in_review_msg": "آپ کے اسکرین شاٹس کی تصدیق جاری ہے — خودکار تصدیق مکمل ہوتے ہی رابطہ نمبر کھل جائے گا۔",
 })
 TRANSLATIONS["en"].update({
     "name_req": "Name is required.",
@@ -386,6 +398,18 @@ TRANSLATIONS["en"].update({
     "st_in_review": "In review",
     "st_unlocked": "Number unlocked",
     "st_rejected": "Rejected",
+    "st_needs_review": "Needs review",
+    # automatic payment verification (2026-10-06)
+    "shot_auto_verified": "Your payment was auto-verified ✅",
+    "shot_needs_review": "Auto-verification failed — screenshot sent for review. You may re-upload a correct screenshot.",
+    "auto_verified_badge": "✓ Auto-verified",
+    "reupload_hint": "Auto-verification failed — please re-upload a correct screenshot",
+    "reason_amount_mismatch": "Amount doesn't match the commission",
+    "reason_identifier_missing": "Our number/account not found in the screenshot",
+    "reason_trx_missing": "Transaction ID not found",
+    "reason_trx_reused": "This transaction was already used",
+    "reason_ocr_error": "Screenshot could not be read",
+    "in_review_msg": "Your screenshots are being verified — the contact number will unlock as soon as automatic verification completes.",
 })
 
 # Lucky Draw + referral keys (2026-09-28) — safe version: free tokens only, real winners
