@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}{{ t('admin_monitoring') }}{% endblock %}
+{% block content %}
+<div class="container">
+  <h1>🛡️ {{ t('admin_monitoring') }}</h1>
+  <p><a href="{{ url_for('admin.dashboard') }}">&larr; {{ t('back') }}</a></p>
+  <p class="muted">{{ t('mon_flag_hint').format(views=min_views, cancels=min_cancels) }}</p>
+
+  <h2>{{ t('mon_listing_table') }}</h2>
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>{{ t('title_ur') }}</th>
+          <th>{{ t('mon_views') }}</th>
+          <th>{{ t('mon_started') }}</th>
+          <th>{{ t('mon_unlocks') }}</th>
+          <th>{{ t('mon_cancelled') }}</th>
+          <th>{{ t('mon_suspicious') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr{% if r.suspicious %} style="background:#fff3cd"{% endif %}>
+          <td>{{ r.listing.id }}</td>
+          <td><a href="/listing/{{ r.listing.id }}">{{ r.listing.title_ur }}</a><br>
+            <small class="muted">{{ r.listing.landlord.name if r.listing.landlord else '' }}</small></td>
+          <td>{{ r.views }}</td>
+          <td>{{ r.started }}</td>
+          <td>{{ r.unlocks }}</td>
+          <td>{{ r.cancelled }}</td>
+          <td>{% if r.suspicious %}<span class="badge badge-yellow">⚠️ {{ t('mon_suspicious') }}</span>{% else %}—{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="muted">{{ t('mon_none') }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h2>{{ t('mon_user_table') }}</h2>
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>{{ t('col_id') }}</th>
+          <th>{{ t('name') }}</th>
+          <th>{{ t('role') }}</th>
+          <th>{{ t('mon_cancelled') }}</th>
+          <th>{{ t('warnings_label') }}</th>
+          <th>{{ t('mon_suspicious') }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in user_rows %}
+        <tr{% if r.suspicious %} style="background:#fff3cd"{% endif %}>
+          <td>{{ r.user.public_id }}</td>
+          <td>{{ r.user.name }}</td>
+          <td>{{ r.user.role }}</td>
+          <td>{{ r.cancellations }}</td>
+          <td>{{ r.user.warnings or 0 }}</td>
+          <td>{% if r.suspicious %}<span class="badge badge-yellow">⚠️ {{ t('mon_suspicious') }}</span>{% else %}—{% endif %}</td>
+          <td>
+            <form method="post" action="{{ url_for('admin.warn_user', uid=r.user.id) }}" style="display:inline">
+              <button type="submit" class="btn btn-small btn-secondary">{{ t('warn') }}</button>
+            </form>
+            <form method="post" action="{{ url_for('admin.toggle_user', uid=r.user.id) }}" style="display:inline">
+              <button type="submit" class="btn btn-small {% if r.user.is_active %}btn-danger{% else %}btn-primary{% endif %}">
+                {{ t('deactivate') if r.user.is_active else t('activate') }}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="muted">{{ t('mon_none') }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
