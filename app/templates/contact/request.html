@@ -129,8 +129,13 @@
         (function(){
           var defLat = {{ listing.location_lat if listing.location_lat else 'null' }};
           var defLng = {{ listing.location_lng if listing.location_lng else 'null' }};
-          var cityCenters = {chiniot: [31.7202, 72.9789], lalian: [31.8236, 72.7997], bhuwana: [31.5697, 72.6528]};
-          var start = (defLat !== null && defLng !== null) ? [defLat, defLng] : (cityCenters["{{ listing.city }}"] || [31.7202, 72.9789]);
+          // Default map center: legacy district entries kept; everything else falls back
+          // to central Punjab. The landlord drags the pin to the exact spot anyway —
+          // the pin (lat/lng) is stored per listing, so this works at tehsil level too.
+          var cityCenters = {chiniot: [31.7202, 72.9789], lalian: [31.8236, 72.7997], bhuwana: [31.5697, 72.6528],
+            lahore: [31.5497, 74.3436], rawalpindi: [33.5651, 73.0169], faisalabad: [31.4504, 73.1350],
+            multan: [30.1575, 71.5249], gujranwala: [32.1877, 74.1945], sialkot: [32.4945, 74.5229]};
+          var start = (defLat !== null && defLng !== null) ? [defLat, defLng] : (cityCenters["{{ listing.city }}"] || [31.5000, 72.8000]);
           var map = L.map('loc-map').setView(start, 14);
           L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19, attribution: '© OpenStreetMap'}).addTo(map);
           var marker = null;
