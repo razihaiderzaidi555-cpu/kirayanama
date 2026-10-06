@@ -8,7 +8,7 @@ from flask_login import LoginManager
 from models import db, User, CITIES
 from translations import get_text
 from punjab_divisions import (
-    DIVISIONS, division_slugs, place_name, resolve_location,
+    DIVISIONS, division_slugs, division_image, place_name, resolve_location,
     division_of_district, locate_tehsil, LEGACY_CITY_MAP,
 )
 
@@ -58,6 +58,7 @@ def create_app():
             "tehsil_name": lambda slug: place_name(slug, lang),
             "DIVISIONS": DIVISIONS,
             "division_slugs": division_slugs(),
+            "division_image": division_image,
         }
 
     # blueprints (each worker owns one module; missing ones are skipped)
