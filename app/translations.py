@@ -145,7 +145,7 @@ TRANSLATIONS = {
         "view": "دیکھیں",
         "back": "واپس",
         "footer_note": "کرایہ نامہ — کرائے کے مکان کا باعتماد پلیٹ فارم۔",
-        "seo_home_title": "کرایہ نامہ | چنیوٹ، لالیاں، بھوانہ میں کرائے کے مکان",
+        "seo_home_title": "کرایہ نامہ | پورے پنجاب میں کرائے کے مکان",
         "seo_home_desc": "چنیوٹ، لالیاں اور بھوانہ میں کرائے کے مکان اور دکانیں۔ نہ ٹوکن نہ ایڈوانس — صرف ڈیل پکی ہونے پر 15% کمیشن۔",
         # W4 keys
         "admin_dash": "ڈیش بورڈ",
@@ -299,7 +299,7 @@ TRANSLATIONS = {
         "view": "View",
         "back": "Back",
         "footer_note": "KirayaNama — the trusted rental platform.",
-        "seo_home_title": "KirayaNama | Houses for rent in Chiniot, Lalian, Bhuwana",
+        "seo_home_title": "KirayaNama | Houses for rent across Punjab",
         "seo_home_desc": "Houses and shops for rent in Chiniot, Lalian and Bhuwana. No token, no advance — 15% commission only when the deal closes.",
         # W4 keys
         "admin_dash": "Dashboard",
