@@ -151,7 +151,7 @@ TRANSLATIONS = {
         "visitors_total": "کل وزٹر",
         "visitors_week": "اس ہفتے",
         "admin_visitors": "ویب سائٹ کے وزٹر",
-        "seo_home_title": "کرایہ نامہ | چنیوٹ، لالیاں، بھوانہ میں کرائے کے مکان",
+        "seo_home_title": "کرایہ نامہ™ | پورے پنجاب میں کرائے کے مکان",
         "seo_home_desc": "چنیوٹ، لالیاں اور بھوانہ میں کرائے کے مکان اور دکانیں۔ نہ ٹوکن نہ ایڈوانس — صرف ڈیل پکی ہونے پر 15% کمیشن۔",
         # W4 keys
         "admin_dash": "ڈیش بورڈ",
@@ -311,7 +311,7 @@ TRANSLATIONS = {
         "visitors_total": "Total visitors",
         "visitors_week": "This week",
         "admin_visitors": "Website visitors",
-        "seo_home_title": "KirayaNama | Houses for rent in Chiniot, Lalian, Bhuwana",
+        "seo_home_title": "KirayaNama™ | Houses for rent across Punjab",
         "seo_home_desc": "Houses and shops for rent in Chiniot, Lalian and Bhuwana. No token, no advance — 15% commission only when the deal closes.",
         # W4 keys
         "admin_dash": "Dashboard",
