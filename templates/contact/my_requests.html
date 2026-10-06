@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ t('my_requests_title') }}{% endblock %}
+{% block content %}
+<div class="container">
+  <h2>{{ t('my_requests_title') }}</h2>
+  {% if requests %}
+  <div class="grid">
+    {% for cr in requests %}
+    <div class="card"><div class="pad">
+      <h3>{{ cr.listing.title_ur if lang=='ur' else (cr.listing.title_en or cr.listing.title_ur) }}</h3>
+      <p class="rent">{{ t('rs') }} {{ "{:,}".format(cr.listing.monthly_rent) }} / {{ t('per_month') }}</p>
+      <p class="muted">{% if cr.listing.tehsil %}{{ tehsil_name(cr.listing.tehsil) }}، {% endif %}{{ district_name(cr.listing.city) }}{% if cr.listing.area %} — {{ cr.listing.area }}{% endif %}</p>
+      <p><span class="badge">{{ t('status_' + cr.status) }}</span></p>
+      <a class="btn btn-primary btn-small" href="{{ url_for('contact.request_detail', rid=cr.id) }}">{{ t('view_request') }}</a>
+    </div></div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">{{ t('my_requests_empty') }}</p>
+  <a class="btn btn-primary" href="{{ url_for('public.listings_page') }}">{{ t('hero_cta_browse') }}</a>
+  {% endif %}
+</div>
+{% endblock %}
