@@ -373,6 +373,11 @@ TRANSLATIONS["ur"].update({
     "reason_trx_reused": "یہ ٹرانزیکشن پہلے استعمال ہو چکی ہے",
     "reason_ocr_error": "اسکرین شاٹ پڑھا نہیں جا سکا",
     "in_review_msg": "آپ کے اسکرین شاٹس کی تصدیق جاری ہے — خودکار تصدیق مکمل ہوتے ہی رابطہ نمبر کھل جائے گا۔",
+    "tid_label": "ٹرانزیکشن آئی ڈی (TID)",
+    "tid_hint": "رسید پر لکھا TID یہاں لکھیں",
+    "tid_invalid": "ٹرانزیکشن آئی ڈی درست نہیں — 8 سے 20 ہندسے لکھیں۔",
+    "tid_reused": "یہ ٹرانزیکشن آئی ڈی پہلے استعمال ہو چکی ہے۔",
+    "payment_sla": "ادائیگی کی تصدیق 24 گھنٹے کے اندر ہو جائے گی۔",
 })
 TRANSLATIONS["en"].update({
     "name_req": "Name is required.",
@@ -410,6 +415,11 @@ TRANSLATIONS["en"].update({
     "reason_trx_reused": "This transaction was already used",
     "reason_ocr_error": "Screenshot could not be read",
     "in_review_msg": "Your screenshots are being verified — the contact number will unlock as soon as automatic verification completes.",
+    "tid_label": "Transaction ID (TID)",
+    "tid_hint": "Enter the TID shown on your receipt",
+    "tid_invalid": "Invalid transaction ID — enter 8 to 20 digits.",
+    "tid_reused": "This transaction ID has already been used.",
+    "payment_sla": "Payment will be verified within 24 hours.",
 })
 
 # Lucky Draw + referral keys (2026-09-28) — safe version: free tokens only, real winners
