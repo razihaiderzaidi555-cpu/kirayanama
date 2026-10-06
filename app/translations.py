@@ -3,7 +3,17 @@
 
 def get_text(key, lang="ur"):
     d = TRANSLATIONS.get(lang) or TRANSLATIONS["ur"]
-    return d.get(key, TRANSLATIONS["ur"].get(key, key))
+    if key in d:
+        return d[key]
+    # Auto-generated Division/District/Tehsil names live in place_names.py.
+    try:
+        from place_names import PLACE_NAMES
+        p = PLACE_NAMES.get(lang) or PLACE_NAMES.get("ur", {})
+        if key in p:
+            return p[key]
+    except ImportError:
+        pass
+    return TRANSLATIONS["ur"].get(key, key)
 
 
 TRANSLATIONS = {
