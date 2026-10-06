@@ -181,15 +181,21 @@ def payment(rid):
     # --- automatic payment verification (fail-open: any crash -> review) ---
     # OCR checks amount + identifier; the TYPED tid takes precedence over any
     # OCR-extracted TrxID for the uniqueness claim.
-    identifiers = [get_setting(k) for k in
-                   ("jazzcash_number", "easypaisa_number", "upaisa_number",
-                    "hbl_account")]
+    companies = [(key, get_setting(key + "_number" if key != "hbl" else "hbl_account"))
+                   for key in ("jazzcash", "easypaisa", "upaisa", "hbl")]
     img_path = os.path.join(current_app.config["UPLOAD_FOLDER"], "payments", name)
     try:
-        ok, ocr_trx, reason = verify_payment_screenshot(
-            img_path, cr.commission, identifiers, require_trx_id=False)
+        ok, ocr_trx, reason, company = verify_payment_screenshot(
+            img_path, cr.commission, companies, require_trx_id=False)
     except Exception:  # noqa: BLE001 - guard must never break uploads
-        ok, ocr_trx, reason = False, None, "ocr_error"
+        ok, ocr_trx, reason, company = False, None, "ocr_error", None
+    # persist the typed TID + detected company for the /api/payment-events feed
+    if is_renter:
+        cr.renter_tid = tid
+        cr.renter_company = company or ""
+    else:
+        cr.landlord_tid = tid
+        cr.landlord_company = company or ""
     if ok:
         # Fresh (or this side's own re-upload): claim the typed TID.
         if claimed is None:

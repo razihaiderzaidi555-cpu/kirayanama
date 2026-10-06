@@ -69,6 +69,7 @@ def create_app():
     _try_register(app, "routes_contact", "bp")
     _try_register(app, "routes_admin", "bp")
     _try_register(app, "routes_lucky", "bp")
+    _try_register(app, "routes_api", "bp")
 
     @app.route("/lang/<code>")
     def set_lang(code):
@@ -136,6 +137,11 @@ def _migrate_schema():
         stmts.append("ALTER TABLE contact_requests ADD COLUMN renter_review_reason VARCHAR(40)")
     if "landlord_review_reason" not in crcols:
         stmts.append("ALTER TABLE contact_requests ADD COLUMN landlord_review_reason VARCHAR(40)")
+    # payment-events API feed (2026-10-06): per-side typed TID + company
+    for col, typ in (("renter_tid", "VARCHAR(32)"), ("landlord_tid", "VARCHAR(32)"),
+                     ("renter_company", "VARCHAR(16)"), ("landlord_company", "VARCHAR(16)")):
+        if col not in crcols:
+            stmts.append(f"ALTER TABLE contact_requests ADD COLUMN {col} {typ}")
     if stmts:
         with db.engine.begin() as conn:
             for s in stmts:
@@ -189,6 +195,10 @@ def _ensure_production_defaults():
     for key, value in defaults.items():
         if Setting.query.get(key) is None:
             db.session.add(Setting(key=key, value=value))
+    import secrets
+    if Setting.query.get("alert_token") is None:
+        db.session.add(Setting(key="alert_token",
+                               value=secrets.token_urlsafe(24)))  # 32 chars
     if User.query.filter_by(role="admin").first() is None:
         admin = User(public_id="KN-1", name="Admin", phone="03115021212",
                      role="admin", city="chiniot",

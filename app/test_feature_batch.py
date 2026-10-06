@@ -8,7 +8,7 @@ os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(tmpdir, "test.db")
 os.environ["SECRET_KEY"] = "test-secret"
 
 from app import create_app
-from models import db, User, Listing, ContactRequest, PasswordReset, Rating
+from models import db, User, Listing, ContactRequest, PasswordReset, Rating, get_setting
 
 app = create_app()
 app.config["TESTING"] = True
@@ -428,9 +428,15 @@ with app.app_context():
           payment_guard.extract_trx_id("payment ho gai shukriya") is None)
     with mock.patch("payment_guard.ocr_text",
                      return_value="Easypaisa Rs 2,250 to 03115021212 Transaction ID 12345678901"):
-        ok, trx, reason = payment_guard.verify_payment_screenshot(
+        ok, trx, reason, company = payment_guard.verify_payment_screenshot(
             "/tmp/x.png", 2250, ["03115021212", "01737900590403"])
         check("pay: full pass", ok is True and trx == "12345678901" and reason == "")
+        check("pay: company none for plain identifiers", company is None)
+    with mock.patch("payment_guard.ocr_text",
+                     return_value="Rs 2,250 to 01737900590403 Transaction ID 12345678901"):
+        ok, trx, reason, company = payment_guard.verify_payment_screenshot(
+            "/tmp/x.png", 2250, [("easypaisa", "03115021212"), ("hbl", "01737900590403")])
+        check("pay: company detected from pairs", ok is True and company == "hbl")
     with mock.patch("payment_guard.ocr_text",
                      return_value="Easypaisa Rs 2,000 to 03115021212 Transaction ID 12345678901"):
         check("pay: amount mismatch",
@@ -490,7 +496,7 @@ with app.app_context():
     client.post("/login", data={"phone": "03000000003", "password": "rt123456"})
     # typed TID takes precedence over OCR-extracted trx for the claim
     with mock.patch("routes_contact.verify_payment_screenshot",
-                    return_value=(True, "TRXAAA111", "")):
+                    return_value=(True, "TRXAAA111", "", "easypaisa")):
         r = client.post(f"/request/{cr1.id}/payment",
                         data={"tid": "11111111", "screenshot": _shot()},
                         content_type="multipart/form-data", follow_redirects=True)
@@ -506,7 +512,7 @@ with app.app_context():
     client.get("/logout")
     client.post("/login", data={"phone": "03000000002", "password": "ll123456"})
     with mock.patch("routes_contact.verify_payment_screenshot",
-                    return_value=(True, "TRXBBB222", "")):
+                    return_value=(True, "TRXBBB222", "", "easypaisa")):
         client.post(f"/request/{cr1.id}/payment",
                     data={"tid": "22222222", "screenshot": _shot()},
                     content_type="multipart/form-data", follow_redirects=True)
@@ -541,7 +547,7 @@ with app.app_context():
     # TID reuse across deals -> Urdu error, upload not even saved
     cr2 = _mkdeal(15000)
     with mock.patch("routes_contact.verify_payment_screenshot",
-                    return_value=(True, "TRXZZZ999", "")) as mv:
+                    return_value=(True, "TRXZZZ999", "", "easypaisa")) as mv:
         r = client.post(f"/request/{cr2.id}/payment",
                         data={"tid": "11111111", "screenshot": _shot()},
                         content_type="multipart/form-data", follow_redirects=True)
@@ -554,7 +560,7 @@ with app.app_context():
 
     # Urdu digits in TID accepted (normalized)
     with mock.patch("routes_contact.verify_payment_screenshot",
-                    return_value=(True, "TRXUUU1", "")):
+                    return_value=(True, "TRXUUU1", "", "easypaisa")):
         client.post(f"/request/{cr2.id}/payment",
                     data={"tid": "۱۲۳۴۵۶۷۸", "screenshot": _shot()},
                     content_type="multipart/form-data", follow_redirects=True)
@@ -566,7 +572,7 @@ with app.app_context():
     # amount mismatch (valid tid, OCR fails amount)
     cr3 = _mkdeal(15000)
     with mock.patch("routes_contact.verify_payment_screenshot",
-                    return_value=(False, None, "amount_mismatch")):
+                    return_value=(False, None, "amount_mismatch", None)):
         client.post(f"/request/{cr3.id}/payment",
                     data={"tid": "33333333", "screenshot": _shot()},
                     content_type="multipart/form-data", follow_redirects=True)
@@ -589,7 +595,7 @@ with app.app_context():
 
     # re-upload after failure succeeds
     with mock.patch("routes_contact.verify_payment_screenshot",
-                    return_value=(True, "TRXCCC333", "")):
+                    return_value=(True, "TRXCCC333", "", "easypaisa")):
         client.post(f"/request/{cr4.id}/payment",
                     data={"tid": "55555555", "screenshot": _shot()},
                     content_type="multipart/form-data", follow_redirects=True)
@@ -616,7 +622,7 @@ with app.app_context():
     client.get("/logout")
     client.post("/login", data={"phone": "03000000003", "password": "rt123456"})
     with mock.patch("routes_contact.verify_payment_screenshot",
-                    return_value=(False, None, "identifier_missing")):
+                    return_value=(False, None, "identifier_missing", None)):
         client.post(f"/request/{cr6.id}/payment",
                     data={"tid": "66666666", "screenshot": _shot()},
                     content_type="multipart/form-data", follow_redirects=True)
@@ -626,6 +632,74 @@ with app.app_context():
     r = client.post(f"/admin/payments/{cr6.id}/reject", follow_redirects=True)
     check("pay: admin reject on needs_review",
           ContactRequest.query.get(cr6.id).status == "rejected")
+
+    # --- rechecking-window SLA message ---
+    from translations import TRANSLATIONS
+    check("sla: rechecking window ur",
+          "رات 9 سے 12" in TRANSLATIONS["ur"]["payment_sla"]
+          and "دونوں فریقین کا رابطہ" in TRANSLATIONS["ur"]["payment_sla"])
+    check("sla: rechecking window en",
+          "9 PM" in TRANSLATIONS["en"]["payment_sla"])
+    client.get("/logout")
+    client.post("/login", data={"phone": "03000000003", "password": "rt123456"})
+    r = client.get(f"/request/{cr5.id}")  # still awaiting_payment
+    check("sla: rendered on payment page",
+          r.status_code == 200 and "رات 9 سے 12" in r.data.decode())
+
+    # --- typed TID + company persisted on upload ---
+    check("pay: renter tid stored", c1.renter_tid == "11111111")
+    check("pay: renter company stored", c1.renter_company == "easypaisa")
+
+    # --- alert token auto-generated on boot ---
+    tok = get_setting("alert_token")
+    check("api: alert token auto-generated", isinstance(tok, str) and len(tok) == 32)
+
+    # --- /api/payment-events ---
+    import json as _json
+    since_old = "2020-01-01T00:00:00"
+    r = client.get(f"/api/payment-events?since={since_old}&token={tok}")
+    check("api: 200 with valid token", r.status_code == 200)
+    evs = _json.loads(r.data)["events"]
+    check("api: events listed", len(evs) >= 2)
+    ev0 = evs[0]
+    check("api: event shape",
+          set(ev0) == {"event_id", "created_at", "deal_id", "side", "payer_name",
+                       "amount", "tid", "company", "auto_status"})
+    check("api: events ordered asc",
+          all(evs[i]["created_at"] <= evs[i + 1]["created_at"] for i in range(len(evs) - 1)))
+    renter_ev = [e for e in evs if e["deal_id"] == cr1.id and e["side"] == "renter"][0]
+    check("api: renter event fields",
+          renter_ev["tid"] == "11111111" and renter_ev["company"] == "easypaisa"
+          and renter_ev["auto_status"] == "verified"
+          and renter_ev["amount"] == c1.commission and renter_ev["payer_name"] == "Kirayedar")
+    needs = [e for e in evs if e["auto_status"] == "needs_review"]
+    check("api: needs_review events included", len(needs) >= 1)
+    r = client.get(f"/api/payment-events?since=2999-01-01T00:00:00&token={tok}")
+    check("api: since filters", _json.loads(r.data)["events"] == [])
+    r = client.get(f"/api/payment-events?since={since_old}&token=wrong")
+    check("api: wrong token -> 403", r.status_code == 403)
+    r = client.get(f"/api/payment-events?since={since_old}")
+    check("api: missing token -> 403", r.status_code == 403)
+    r = client.get(f"/api/payment-events?since=not-a-date&token={tok}")
+    check("api: bad since -> 400", r.status_code == 400)
+    r = client.get(f"/api/payment-events?token={tok}")
+    check("api: missing since -> 400", r.status_code == 400)
+
+    # --- company detection unit tests ---
+    check("pay: detect_company easypaisa",
+          payment_guard.detect_company("sent 1800 to 03115021212",
+                                       [("jazzcash", "03119998888"),
+                                        ("easypaisa", "03115021212")]) == "easypaisa")
+    check("pay: detect_company first-match-wins",
+          payment_guard.detect_company("to 03115021212",
+                                       [("jazzcash", "03115021212"),
+                                        ("easypaisa", "03115021212")]) == "jazzcash")
+    check("pay: detect_company hbl",
+          payment_guard.detect_company("ac 01737900590403",
+                                       [("easypaisa", "03115021212"),
+                                        ("hbl", "01737900590403")]) == "hbl")
+    check("pay: detect_company none",
+          payment_guard.detect_company("shukriya", [("easypaisa", "03115021212")]) is None)
 
 print(f"\n==== {len(passed)} passed, {len(failed)} failed ====")
 if failed:

@@ -26,5 +26,11 @@
       <button type="submit" class="btn btn-primary">{{ t('save_settings') }}</button>
     </form>
   </div>
+  <div class="card">
+    <div class="form-group">
+      <label>{{ t('alert_token_label') }}</label>
+      <input type="text" value="{{ alert_token }}" dir="ltr" readonly onclick="this.select()">
+    </div>
+  </div>
 </div>
 {% endblock %}

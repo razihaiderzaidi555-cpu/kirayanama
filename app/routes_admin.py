@@ -329,4 +329,5 @@ def settings():
         easypaisa_number=get_setting("easypaisa_number"),
         upaisa_number=get_setting("upaisa_number"),
         hbl_account=get_setting("hbl_account"),
+        alert_token=get_setting("alert_token"),
     )

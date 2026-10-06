@@ -377,7 +377,8 @@ TRANSLATIONS["ur"].update({
     "tid_hint": "رسید پر لکھا TID یہاں لکھیں",
     "tid_invalid": "ٹرانزیکشن آئی ڈی درست نہیں — 8 سے 20 ہندسے لکھیں۔",
     "tid_reused": "یہ ٹرانزیکشن آئی ڈی پہلے استعمال ہو چکی ہے۔",
-    "payment_sla": "ادائیگی کی تصدیق 24 گھنٹے کے اندر ہو جائے گی۔",
+    "payment_sla": "ادائیگی کی تصدیق 24 گھنٹے کے اندر ہو جائے گی۔ ہماری دوبارہ جانچ رات 9 سے 12 بجے کے درمیان ہوتی ہے — تصدیق کے بعد دونوں فریقین کا رابطہ کھول دیا جائے گا۔",
+    "alert_token_label": "الرٹ ٹوکن (واٹس ایپ الرٹس کے لیے)",
 })
 TRANSLATIONS["en"].update({
     "name_req": "Name is required.",
@@ -419,7 +420,8 @@ TRANSLATIONS["en"].update({
     "tid_hint": "Enter the TID shown on your receipt",
     "tid_invalid": "Invalid transaction ID — enter 8 to 20 digits.",
     "tid_reused": "This transaction ID has already been used.",
-    "payment_sla": "Payment will be verified within 24 hours.",
+    "payment_sla": "Payment will be verified within 24 hours. Our rechecking happens between 9 PM and 12 midnight — after verification, the contact for both parties will be unlocked.",
+    "alert_token_label": "Alert token (for WhatsApp alerts)",
 })
 
 # Lucky Draw + referral keys (2026-09-28) — safe version: free tokens only, real winners

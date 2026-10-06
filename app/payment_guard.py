@@ -99,6 +99,29 @@ def find_identifier(text, identifiers):
     return None
 
 
+def detect_company(text, companies):
+    """Return the company key whose identifier appears in text, else None.
+
+    `companies` is a list of (company_key, identifier) pairs, e.g.
+    [("jazzcash", "03115021212"), ("hbl", "01737900590403")].
+    First match in list order wins (several companies may share one number).
+    Plain identifier strings are also accepted (company key then None).
+    """
+    text = normalize_digits(text or "")
+    flat = re.sub(r"[\s\-,]", "", text)
+    for item in companies or []:
+        if isinstance(item, (tuple, list)) and len(item) == 2:
+            key, ident = item
+        else:
+            key, ident = None, item
+        ident = re.sub(r"[\s\-]", "", normalize_digits(str(ident or "")))
+        if not ident:
+            continue
+        if re.search(r"(?<!\d)" + re.escape(ident) + r"(?!\d)", flat):
+            return key
+    return None
+
+
 def extract_trx_id(text):
     """Return the first transaction ID found in text, else None."""
     text = normalize_digits(text or "")
@@ -113,10 +136,13 @@ def verify_payment_screenshot(image_path, expected_amount, identifiers,
                               require_trx_id=True):
     """Verify one payment screenshot.
 
-    Returns (ok, trx_id, reason): ok=True only when amount + identifier hold
-    (and a transaction ID is found when require_trx_id=True). The caller may
-    pass a user-typed TID for the UsedTrx uniqueness check — the typed TID
-    always takes precedence over the OCR-extracted one.
+    Returns (ok, trx_id, reason, company): ok=True only when amount +
+    identifier hold (and a transaction ID is found when require_trx_id=True).
+    `company` is the key of the matched payment company (see detect_company)
+    or None. `identifiers` may be plain identifier strings or
+    (company_key, identifier) pairs. The caller may pass a user-typed TID for
+    the UsedTrx uniqueness check — the typed TID always takes precedence over
+    the OCR-extracted one.
 
     Never raises — any failure, including an OCR crash, returns ok=False
     with a reason code (fail-open to manual review).
@@ -125,17 +151,20 @@ def verify_payment_screenshot(image_path, expected_amount, identifiers,
         text = ocr_text(image_path)
     except Exception as exc:  # noqa: BLE001
         log.warning("payment_guard: OCR crashed for %s: %s", image_path, exc)
-        return False, None, "ocr_error"
+        return False, None, "ocr_error", None
     if not text:
-        return False, None, "ocr_error"
+        return False, None, "ocr_error", None
     if not find_amount(text, expected_amount):
-        return False, None, "amount_mismatch"
-    if not find_identifier(text, identifiers):
-        return False, None, "identifier_missing"
+        return False, None, "amount_mismatch", None
+    company = detect_company(text, identifiers)
+    if company is None and not find_identifier(
+            text, [i[1] if isinstance(i, (tuple, list)) else i
+                   for i in (identifiers or [])]):
+        return False, None, "identifier_missing", None
     trx = extract_trx_id(text)
     if require_trx_id and not trx:
-        return False, None, "trx_missing"
-    return True, trx, ""
+        return False, None, "trx_missing", company
+    return True, trx, "", company
 
 
 def unlock_request(cr):

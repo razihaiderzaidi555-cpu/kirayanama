@@ -131,6 +131,12 @@ class ContactRequest(db.Model):
     landlord_verified = db.Column(db.Boolean, default=False)
     renter_review_reason = db.Column(db.String(40), default="")
     landlord_review_reason = db.Column(db.String(40), default="")
+    # typed transaction ID + detected payment company per side (2026-10-06:
+    # feeds the /api/payment-events feed for the WhatsApp alert cron).
+    renter_tid = db.Column(db.String(32), default="")
+    landlord_tid = db.Column(db.String(32), default="")
+    renter_company = db.Column(db.String(16), default="")
+    landlord_company = db.Column(db.String(16), default="")
     verified_at = db.Column(db.DateTime, nullable=True)
     cancelled_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
