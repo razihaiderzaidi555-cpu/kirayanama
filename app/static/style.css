@@ -64,6 +64,7 @@ body{
 .grid{display:grid;grid-template-columns:1fr;gap:16px;margin:14px 0}
 @media(min-width:640px){.grid{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:960px){.grid-3{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:960px){.grid-2{grid-template-columns:repeat(2,1fr)}}
 .card{background:var(--card);border:1px solid var(--border);border-radius:16px;
   overflow:hidden;display:flex;flex-direction:column;
   box-shadow:0 3px 14px rgba(6,58,36,.08);
@@ -87,15 +88,24 @@ body{
   box-shadow:0 2px 8px rgba(156,124,20,.4)}
 
 /* city cards with photo backgrounds */
-.city-card{position:relative;min-height:170px;border-radius:16px;overflow:hidden;
+.city-card{position:relative;min-height:250px;border-radius:16px;overflow:hidden;
   display:flex;align-items:center;justify-content:center;text-align:center;
   background-size:cover;background-position:center;
   border:2px solid var(--gold)}
 .city-card::before{content:"";position:absolute;inset:0;
   background:linear-gradient(180deg,rgba(4,42,26,.45),rgba(4,42,26,.78))}
 .city-card .pad{position:relative;z-index:1}
-.city-card h3{color:#fff;font-size:1.4em;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+.city-card h3{color:#fff;font-size:1.65em;text-shadow:0 1px 6px rgba(0,0,0,.6)}
 .city-card p{color:var(--gold-light);font-size:.92em;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+
+/* ---------- tehsil chips ---------- */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;justify-content:center}
+.chips-big{justify-content:flex-start;margin:6px 0 18px}
+.chip{display:inline-block;padding:6px 14px;border-radius:999px;border:1px solid var(--gold);
+  background:rgba(255,255,255,.85);color:#0b5c38;font-size:.85em;font-weight:600;
+  text-decoration:none;transition:all .15s ease}
+.chip:hover{background:#0b5c38;color:#fff}
+.chip-active{background:#0b5c38;color:#fff}
 
 /* ---------- buttons ---------- */
 .btn{display:inline-block;padding:11px 22px;border-radius:10px;border:1px solid transparent;
@@ -113,6 +123,8 @@ body{
 .btn-secondary{background:#fff;color:var(--green);border:1.5px solid var(--green)}
 .btn-secondary:hover{background:#eef6f0}
 .btn-danger{background:var(--red);color:#fff}
+.btn-whatsapp{background:#25d366;color:#fff;box-shadow:0 3px 10px rgba(37,211,102,.35)}
+.btn-whatsapp:hover{background:#1fb857}
 .btn-small{padding:6px 12px;font-size:.9em}
 
 /* ---------- badges ---------- */
