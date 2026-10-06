@@ -32,10 +32,9 @@
 </div>
 
 <h2 class="section-title" id="divisions">{{ t('divisions_title') }}</h2>
-<div class="grid grid-3">
+<div class="grid grid-2">
   {% for d in division_slugs %}
-  {% set divimg = {'lahore': 'house-2.jpg', 'faisalabad': 'house-4.jpg', 'multan': 'house-1.jpg'}.get(d, 'house-3.jpg') %}
-  <a class="card city-card" href="{{ url_for('public.division_page', division=d) }}" style="text-decoration:none;background-image:url('{{ url_for('static', filename='images/' + divimg) }}')">
+  <a class="card city-card" href="{{ url_for('public.division_page', division=d) }}" style="text-decoration:none;background-image:url('{{ url_for('static', filename=division_image(d)) }}')">
     <div class="pad"><h3>📍 {{ division_name(d) }}</h3>
     <p>{{ t('div_' + d + '_seo') }} ({{ div_counts.get(d, 0) }})</p></div>
   </a>
