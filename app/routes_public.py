@@ -58,8 +58,22 @@ def city_page(city):
         else:
             abort(404)
     listings = listings.order_by(Listing.created_at.desc()).all()
+    # tehsil chips for the district of this page
+    chip_district = None
+    if city in LEGACY_CITY_MAP:
+        chip_district = LEGACY_CITY_MAP[city][1]
+    elif city in district_slugs():
+        chip_district = city
+    else:
+        _tdiv, _tdist = locate_tehsil(city)
+        chip_district = _tdist
+    tehsils = []
+    if chip_district:
+        _cdiv = division_of_district(chip_district)
+        if _cdiv:
+            tehsils = [(t,) for t in tehsil_slugs(_cdiv, chip_district)]
     return render_template("public/city.html", city_slug=page_title,
-                           listings=listings)
+                           listings=listings, tehsils=tehsils)
 
 
 @bp.route("/division/<division>")
@@ -71,10 +85,13 @@ def division_page(division):
         .order_by(Listing.created_at.desc()).all()
     )
     counts = {}
+    dist_tehsils = {}
     for dist in DIVISIONS[division]["districts"]:
         counts[dist] = _approved().filter_by(city=dist).count()
+        dist_tehsils[dist] = [(t,) for t in tehsil_slugs(division, dist)]
     return render_template("public/division.html", division=division,
-                           listings=listings, counts=counts)
+                           listings=listings, counts=counts,
+                           dist_tehsils=dist_tehsils)
 
 
 @bp.route("/divisions")
