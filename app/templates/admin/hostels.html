@@ -35,6 +35,9 @@
     {% elif h.status == 'approved' %}<span class="badge badge-green">{{ t('status_approved') }}</span>
     {% elif h.status == 'suspended' %}<span class="badge badge-red">{{ t('suspend') }}</span>
     {% else %}<span class="badge badge-red">{{ t('status_rejected') }}</span>{% endif %}
+    {% if h.reg_expires_at %}<small class="muted">{{ t('reg_expires') }}: {{ h.reg_expires_at }}</small>
+      {% if hostel_is_expired(h) %}<span class="badge badge-yellow">{{ t('reg_expired_badge') }}</span>{% endif %}
+    {% endif %}
   </p>
   {% if h.rejection_reason %}<p><small class="muted">{{ t('rejection_reason_label') }}: {{ h.rejection_reason }}</small></p>{% endif %}
   <p>
