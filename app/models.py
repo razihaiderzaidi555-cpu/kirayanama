@@ -13,12 +13,105 @@ db = SQLAlchemy()
 CITIES = sorted(district_slugs())
 PROPERTY_TYPES = ["house", "shop", "portion", "room"]
 LISTING_STATUS = ["pending", "approved", "rejected"]
-REQUEST_STATUS = ["pending_yes", "awaiting_payment", "in_review", "needs_review",
-                  "unlocked", "rejected", "cancelled"]
+REQUEST_STATUS = ["pending_yes", "awaiting_payment", "in_review", "unlocked",
+                  "rejected", "cancelled"]
 COMMISSION_RATE = 0.15  # per side; platform total = 30% of monthly rent
 DEALER_DEFAULT_SHARE = 5.0  # percentage POINTS of rent paid to dealer on their deals
 SUSPICIOUS_MIN_VIEWS = 20  # views with zero unlocks -> flag listing
 SUSPICIOUS_MIN_CANCELLATIONS = 3  # cancelled requests -> flag user
+
+# ---------- Hostels (Phase 2, unfrozen 2026-10-07) ----------
+HOSTEL_FREE_QUOTA = 50     # first 50 hostel REGISTRATIONS per district: free user ID
+HOSTEL_SECURITY_FEE = 2000  # PKR, NON-REFUNDABLE, charged to the hostel-owner side only
+HOSTEL_STATUS = ["pending", "approved", "rejected", "suspended"]
+HOSTEL_PROOF_TYPES = ["utility_bill", "rent_agreement", "signboard", "maps_screenshot"]
+
+
+class Hostel(db.Model):
+    """A hostel registered by its owner. Goes public only after admin approval."""
+    __tablename__ = "hostels"
+    id = db.Column(db.Integer, primary_key=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    hostel_name_ur = db.Column(db.String(200), nullable=False)
+    hostel_name_en = db.Column(db.String(200), nullable=False, default="")
+    district = db.Column(db.String(40), nullable=False)  # district slug — quota is per district
+    division = db.Column(db.String(40), nullable=True)
+    address = db.Column(db.String(255), nullable=False, default="")  # full hostel address
+    owner_cnic = db.Column(db.String(20), nullable=False, default="")
+    cnic_copy = db.Column(db.String(255), nullable=True)  # uploaded CNIC copy filename
+    proof_files = db.Column(db.Text, nullable=True, default="[]")  # JSON list of filenames
+    proof_types = db.Column(db.Text, nullable=True, default="[]")  # JSON list of proof type slugs
+    status = db.Column(db.String(20), default="pending")
+    rejection_reason = db.Column(db.String(255), default="")
+    phone_flag = db.Column(db.Boolean, default=False)  # phone number found in name/address text
+    fee_due = db.Column(db.Boolean, default=False)   # True when registered after free quota
+    fee_paid = db.Column(db.Boolean, default=False)  # admin-verified Rs 2000 security fee
+    fee_screenshot = db.Column(db.String(255), nullable=True)
+    fee_paid_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    owner = db.relationship("User", backref="hostels")
+    photos = db.relationship("HostelPhoto", backref="hostel", lazy=True,
+                             cascade="all, delete-orphan",
+                             order_by="HostelPhoto.sort_order")
+
+    @property
+    def primary_photo(self):
+        for p in self.photos:
+            if p.is_primary:
+                return p
+        return self.photos[0] if self.photos else None
+
+    @property
+    def display_name(self):
+        return self.hostel_name_ur or self.hostel_name_en
+
+
+class HostelPhoto(db.Model):
+    __tablename__ = "hostel_photos"
+    id = db.Column(db.Integer, primary_key=True)
+    hostel_id = db.Column(db.Integer, db.ForeignKey("hostels.id"), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    is_primary = db.Column(db.Boolean, default=False)
+    sort_order = db.Column(db.Integer, default=0)
+
+
+def hostel_quota_used(district):
+    """Registrations (pending+approved+suspended, NOT rejected) counting toward
+    the district's free quota of HOSTEL_FREE_QUOTA."""
+    if not district:
+        return 0
+    return (Hostel.query.filter_by(district=district)
+            .filter(Hostel.status != "rejected").count())
+
+
+def hostel_free_slots(district):
+    """Remaining FREE registration slots in a district (0 when quota exhausted)."""
+    return max(0, HOSTEL_FREE_QUOTA - hostel_quota_used(district))
+
+
+def hostel_fee_due_for(district):
+    """True when the next registration in this district owes the security fee."""
+    return hostel_free_slots(district) <= 0
+
+
+def hostel_proof_files(hostel):
+    """Decode the JSON proof-file list (safe default on bad data)."""
+    import json
+    try:
+        items = json.loads(hostel.proof_files or "[]")
+        return items if isinstance(items, list) else []
+    except Exception:
+        return []
+
+
+def hostel_proof_types(hostel):
+    import json
+    try:
+        items = json.loads(hostel.proof_types or "[]")
+        return items if isinstance(items, list) else []
+    except Exception:
+        return []
 
 
 class User(UserMixin, db.Model):
@@ -29,7 +122,7 @@ class User(UserMixin, db.Model):
     phone = db.Column(db.String(20), unique=True, nullable=False)  # login id
     email = db.Column(db.String(120), nullable=True)  # for OTP recovery + notifications
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), nullable=False, default="renter")  # landlord/renter/dealer/admin
+    role = db.Column(db.String(20), nullable=False, default="renter")  # landlord/renter/dealer/admin/hostel_owner
     city = db.Column(db.String(40), default="")  # tehsil slug (legacy: old flat city slug)
     division = db.Column(db.String(40), default="")  # division slug
     district = db.Column(db.String(40), default="")  # district slug
@@ -76,10 +169,6 @@ class Listing(db.Model):
     location_lng = db.Column(db.Float, nullable=True)
     # landlord closed the listing after renting out — hidden from public browse
     is_closed = db.Column(db.Boolean, default=False)
-    # photo review queue (anti commission-bypass): photos must be approved
-    # before the listing is publicly visible. 'pending'|'approved'|'rejected'
-    photo_status = db.Column(db.String(20), default="pending")
-    photo_flag = db.Column(db.String(40), default="")  # e.g. 'phone_detected'
     property_type = db.Column(db.String(20), default="house")
     bedrooms = db.Column(db.Integer, default=0)
     bathrooms = db.Column(db.Integer, default=0)
@@ -124,19 +213,6 @@ class ContactRequest(db.Model):
     landlord_shot = db.Column(db.String(255), nullable=True)
     renter_paid_at = db.Column(db.DateTime, nullable=True)
     landlord_paid_at = db.Column(db.DateTime, nullable=True)
-    # automatic payment verification (payment_guard): per-side auto-approval
-    # state. A side that fails OCR checks goes to 'needs_review' with a
-    # reason code (rendered via t('reason_' + code)) instead of blocking.
-    renter_verified = db.Column(db.Boolean, default=False)
-    landlord_verified = db.Column(db.Boolean, default=False)
-    renter_review_reason = db.Column(db.String(40), default="")
-    landlord_review_reason = db.Column(db.String(40), default="")
-    # typed transaction ID + detected payment company per side (2026-10-06:
-    # feeds the /api/payment-events feed for the WhatsApp alert cron).
-    renter_tid = db.Column(db.String(32), default="")
-    landlord_tid = db.Column(db.String(32), default="")
-    renter_company = db.Column(db.String(16), default="")
-    landlord_company = db.Column(db.String(16), default="")
     verified_at = db.Column(db.DateTime, nullable=True)
     cancelled_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -162,74 +238,10 @@ class ContactRequest(db.Model):
         return int(round((self.listing.monthly_rent or 0) * (owner.dealer_share or 0) / 100.0))
 
 
-class UsedTrx(db.Model):
-    """Transaction IDs already claimed by an auto-verified payment.
-
-    Kills replay fraud: the same payment screenshot (same TrxID) can never
-    unlock two deals or cover both sides of one deal.
-    """
-    __tablename__ = "used_trx"
-    trx_id = db.Column(db.String(64), primary_key=True)
-    contact_request_id = db.Column(db.Integer, db.ForeignKey("contact_requests.id"),
-                                   nullable=False)
-    side = db.Column(db.String(10), nullable=False, default="")  # renter/landlord
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-
 class Setting(db.Model):
     __tablename__ = "settings"
     key = db.Column(db.String(80), primary_key=True)
     value = db.Column(db.String(255), default="")
-
-
-class VisitStat(db.Model):
-    """Daily visitor counter — one row per calendar day (UTC).
-
-    Incremented by a before_request hook for real human page views
-    (static/API/admin/bot traffic excluded). Shown in the footer and
-    on the admin dashboard.
-    """
-    __tablename__ = "visit_stats"
-    day = db.Column(db.String(10), primary_key=True)  # YYYY-MM-DD
-    count = db.Column(db.Integer, default=0, nullable=False)
-
-
-def _today_str():
-    return datetime.utcnow().strftime("%Y-%m-%d")
-
-
-def record_visit():
-    """Increment today's counter. Returns (today_count, total_count)."""
-    today = _today_str()
-    row = VisitStat.query.get(today)
-    if row is None:
-        row = VisitStat(day=today, count=0)
-        db.session.add(row)
-    row.count = (row.count or 0) + 1
-    db.session.commit()
-    return row.count, visit_total()
-
-
-def visit_total():
-    total = (db.session.query(db.func.coalesce(db.func.sum(VisitStat.count), 0))
-             .scalar())
-    return int(total or 0)
-
-
-def visit_counts():
-    """(today, total) without incrementing — for pages that skip counting."""
-    today = _today_str()
-    row = VisitStat.query.get(today)
-    return (row.count if row else 0), visit_total()
-
-
-def visit_stats():
-    """today / total / last-7-days for the admin dashboard."""
-    today, total = visit_counts()
-    week_ago = (datetime.utcnow() - timedelta(days=6)).strftime("%Y-%m-%d")
-    week = (db.session.query(db.func.coalesce(db.func.sum(VisitStat.count), 0))
-            .filter(VisitStat.day >= week_ago).scalar())
-    return {"today": today, "total": total, "week": int(week or 0)}
 
 
 class PasswordReset(db.Model):
