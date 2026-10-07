@@ -6,6 +6,7 @@
   <div class="card">
     <h1>{{ t('hostel_register_title') }}</h1>
     <p class="muted">{{ t('hostel_register_sub') }}</p>
+    <p class="muted">{{ t('hostel_renewal_policy') }}</p>
     <form method="post" action="{{ url_for('hostel.register') }}" enctype="multipart/form-data">
       <div class="form-group">
         <label for="name">{{ t('name') }}</label>
