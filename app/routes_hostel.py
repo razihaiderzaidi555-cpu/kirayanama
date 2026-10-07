@@ -6,18 +6,23 @@ security-fee screenshot (only after the district's 50 free slots are used up)
 -> admin approval queue -> public browse/detail.
 """
 import json
+import os
+import re
+from datetime import datetime
 from functools import wraps
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, g, current_app)
 from flask_login import login_user, logout_user, current_user, login_required
 
-from models import (db, User, Hostel, HostelPhoto, next_public_id,
+from models import (db, User, Hostel, HostelPhoto, UsedTrx, next_public_id,
                     hostel_free_slots, hostel_fee_due_for, hostel_proof_files,
                     hostel_proof_types, HOSTEL_PROOF_TYPES, HOSTEL_SECURITY_FEE,
                     ensure_referral_code, get_setting)
 from punjab_divisions import district_slugs, DIVISIONS
 from translations import get_text
+from utils import save_upload, find_phone_numbers, normalize_digits
+from payment_guard import verify_payment_screenshot
 from utils import save_upload, find_phone_numbers
 
 bp = Blueprint("hostel", __name__)
@@ -218,25 +223,71 @@ def fee(hid):
     hostel = _get_hostel_or_403(hid)
     if not hostel.fee_due or hostel.fee_paid:
         return redirect(url_for("hostel.dashboard"))
+
+    def _form():
+        return render_template(
+            "hostel/fee.html", hostel=hostel,
+            jazzcash=get_setting("jazzcash_number"),
+            easypaisa=get_setting("easypaisa_number"),
+            upaisa=get_setting("upaisa_number"),
+            hbl=get_setting("hbl_account"))
+
     if request.method == "POST":
+        # --- typed Transaction ID: required, 8-20 digits, globally unique ---
+        tid = normalize_digits((request.form.get("tid") or "").strip())
+        if not re.fullmatch(r"\d{8,20}", tid):
+            flash(T("tid_invalid"))
+            return _form()
+        claimed = UsedTrx.query.get(tid)
+        if claimed is not None and claimed.hostel_id != hostel.id:
+            # Same TID already paid for another deal/fee -> replay attempt.
+            flash(T("tid_reused"))
+            return _form()
         shot = request.files.get("screenshot")
         if not shot or not shot.filename:
             flash(T("shot_no_file"))
+            return _form()
+        try:
+            name = save_upload(
+                shot, "fees", current_app.config["UPLOAD_FOLDER"])
+        except ValueError:
+            flash(T("shot_bad_file"))
+            return _form()
+        hostel.fee_screenshot = name
+        # --- automatic fee verification (fail-open: any crash -> admin review) ---
+        # OCR checks the exact Rs 2000 amount + one of Razi's payment
+        # identifiers; the TYPED tid takes precedence over any OCR-extracted
+        # TrxID for the uniqueness claim.
+        companies = [(key, get_setting(key + "_number" if key != "hbl" else "hbl_account"))
+                     for key in ("jazzcash", "easypaisa", "upaisa", "hbl")]
+        img_path = os.path.join(
+            current_app.config["UPLOAD_FOLDER"], "fees", name)
+        try:
+            ok, _ocr_trx, reason, company = verify_payment_screenshot(
+                img_path, HOSTEL_SECURITY_FEE, companies, require_trx_id=False)
+        except Exception:  # noqa: BLE001 - guard must never break uploads
+            ok, _ocr_trx, reason, company = False, None, "ocr_error", None
+        hostel.fee_tid = tid
+        hostel.fee_company = company or ""
+        if ok:
+            # Fresh (or this hostel's own re-upload): claim the typed TID.
+            if claimed is None:
+                db.session.add(UsedTrx(trx_id=tid, hostel_id=hostel.id,
+                                       side="hostel_fee"))
+            hostel.fee_paid = True
+            hostel.fee_verified = True
+            hostel.fee_review_reason = ""
+            hostel.fee_paid_at = datetime.utcnow()
+            db.session.commit()
+            flash(T("fee_auto_verified"))
         else:
-            try:
-                hostel.fee_screenshot = save_upload(
-                    shot, "fees", current_app.config["UPLOAD_FOLDER"])
-                db.session.commit()
-                flash(T("fee_shot_uploaded"))
-                return redirect(url_for("hostel.dashboard"))
-            except ValueError:
-                flash(T("shot_bad_file"))
-    return render_template(
-        "hostel/fee.html", hostel=hostel,
-        jazzcash=get_setting("jazzcash_number"),
-        easypaisa=get_setting("easypaisa_number"),
-        upaisa=get_setting("upaisa_number"),
-        hbl=get_setting("hbl_account"))
+            # Fail-open: screenshot stays queued for the admin with a reason.
+            hostel.fee_verified = False
+            hostel.fee_review_reason = reason or "ocr_error"
+            db.session.commit()
+            flash(T("fee_needs_review"))
+        return redirect(url_for("hostel.dashboard"))
+    return _form()
 
 
 # ---------------- owner dashboard ----------------

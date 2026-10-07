@@ -6,6 +6,7 @@ from flask import Flask, g, request, session, redirect, url_for, Response
 from flask_login import LoginManager
 
 from models import db, User, CITIES
+from models import record_visit, visit_counts
 from translations import get_text
 from punjab_divisions import (
     DIVISIONS, division_slugs, division_image, district_image, place_name, resolve_location,
@@ -44,12 +45,41 @@ def create_app():
             session["lang"] = lang
         g.lang = lang
 
+    @app.before_request
+    def _count_visit():
+        """Visitor counter: one increment per human GET page view.
+
+        Skips static files, the API, the admin area, health/robots/sitemap,
+        and obvious bots. Never breaks the request — failures fall back to
+        read-only counts. g.visitors_today/total feed the footer line.
+        """
+        try:
+            today, total = visit_counts()
+            if request.method == "GET":
+                path = request.path or ""
+                ua = (request.headers.get("User-Agent") or "").lower()
+                is_bot = any(s in ua for s in
+                             ("bot", "crawl", "spider", "slurp", "mediapartners",
+                              "baidu", "yandex", "semrush", "ahrefs"))
+                if (not path.startswith(("/static", "/api", "/admin",
+                                          "/healthz", "/robots.txt",
+                                          "/sitemap.xml"))
+                        and not is_bot):
+                    today, total = record_visit()
+            g.visitors_today, g.visitors_total = today, total
+        except Exception:
+            app.logger.warning("visit counter failed", exc_info=True)
+            g.visitors_today = getattr(g, "visitors_today", 0)
+            g.visitors_total = getattr(g, "visitors_total", 0)
+
     @app.context_processor
     def _inject():
         lang = getattr(g, "lang", "ur")
         return {
             "t": lambda k: get_text(k, lang),
             "lang": lang,
+            "visitors_today": getattr(g, "visitors_today", 0),
+            "visitors_total": getattr(g, "visitors_total", 0),
             "CITIES": CITIES,
             "city_name": lambda slug: place_name(slug, lang),
             "place_name": lambda slug: place_name(slug, lang),
@@ -69,6 +99,7 @@ def create_app():
     _try_register(app, "routes_contact", "bp")
     _try_register(app, "routes_admin", "bp")
     _try_register(app, "routes_lucky", "bp")
+    _try_register(app, "routes_api", "bp")
     _try_register(app, "routes_hostel", "bp")
 
     @app.route("/lang/<code>")
@@ -118,10 +149,71 @@ def _migrate_schema():
         stmts.append("ALTER TABLE users ADD COLUMN division VARCHAR(40)")
     if "district" not in ucols:
         stmts.append("ALTER TABLE users ADD COLUMN district VARCHAR(40)")
+    # photo review queue (2026-10-06 anti-fraud): nullable so old rows stay
+    # NULL and can be backfilled to 'approved' below. New rows get 'pending'
+    # from the model default, so this UPDATE only ever touches pre-migration
+    # rows and is safe to run on every boot.
+    if "photo_status" not in cols:
+        stmts.append("ALTER TABLE listings ADD COLUMN photo_status VARCHAR(20)")
+    if "photo_flag" not in cols:
+        stmts.append("ALTER TABLE listings ADD COLUMN photo_flag VARCHAR(40)")
+    # automatic payment verification (2026-10-06): per-side auto-approval
+    # state on contact_requests. used_trx table is created by create_all().
+    crcols = {c["name"] for c in inspect(db.engine).get_columns("contact_requests")}
+    if "renter_verified" not in crcols:
+        stmts.append("ALTER TABLE contact_requests ADD COLUMN renter_verified BOOLEAN DEFAULT 0")
+    if "landlord_verified" not in crcols:
+        stmts.append("ALTER TABLE contact_requests ADD COLUMN landlord_verified BOOLEAN DEFAULT 0")
+    if "renter_review_reason" not in crcols:
+        stmts.append("ALTER TABLE contact_requests ADD COLUMN renter_review_reason VARCHAR(40)")
+    if "landlord_review_reason" not in crcols:
+        stmts.append("ALTER TABLE contact_requests ADD COLUMN landlord_review_reason VARCHAR(40)")
+    # payment-events API feed (2026-10-06): per-side typed TID + company
+    for col, typ in (("renter_tid", "VARCHAR(32)"), ("landlord_tid", "VARCHAR(32)"),
+                     ("renter_company", "VARCHAR(16)"), ("landlord_company", "VARCHAR(16)")):
+        if col not in crcols:
+            stmts.append(f"ALTER TABLE contact_requests ADD COLUMN {col} {typ}")
+    # hostel fee auto-verification (2026-10-07): typed TID + company + state
+    hcols = {c["name"] for c in inspect(db.engine).get_columns("hostels")}
+    for col, typ in (("fee_tid", "VARCHAR(32)"), ("fee_company", "VARCHAR(16)"),
+                     ("fee_verified", "BOOLEAN"), ("fee_review_reason", "VARCHAR(40)")):
+        if col not in hcols:
+            stmts.append(f"ALTER TABLE hostels ADD COLUMN {col} {typ}")
+    # used_trx: hostel-fee support (2026-10-07). Old tables have
+    # contact_request_id NOT NULL and no hostel_id — rebuild once.
+    tcols = {c["name"]: c for c in inspect(db.engine).get_columns("used_trx")} \
+        if "used_trx" in inspect(db.engine).get_table_names() else {}
+    if tcols and "hostel_id" not in tcols:
+        stmts.append("__REBUILD_USED_TRX__")
     if stmts:
         with db.engine.begin() as conn:
             for s in stmts:
-                conn.execute(text(s))
+                if s == "__REBUILD_USED_TRX__":
+                    _rebuild_used_trx(conn)
+                else:
+                    conn.execute(text(s))
+    with db.engine.begin() as conn:
+        conn.execute(text("UPDATE listings SET photo_status='approved' "
+                          "WHERE photo_status IS NULL"))
+
+
+def _rebuild_used_trx(conn):
+    """One-time rebuild: used_trx gains nullable hostel_id and a nullable
+    contact_request_id (SQLite can't ALTER COLUMN constraints). Data kept."""
+    from sqlalchemy import text as _text
+    conn.execute(_text(
+        "CREATE TABLE IF NOT EXISTS used_trx_new ("
+        "trx_id VARCHAR(64) NOT NULL PRIMARY KEY, "
+        "contact_request_id INTEGER REFERENCES contact_requests(id), "
+        "side VARCHAR(10) NOT NULL DEFAULT '', "
+        "hostel_id INTEGER REFERENCES hostels(id), "
+        "created_at DATETIME)"))
+    conn.execute(_text(
+        "INSERT OR IGNORE INTO used_trx_new "
+        "(trx_id, contact_request_id, side, created_at) "
+        "SELECT trx_id, contact_request_id, side, created_at FROM used_trx"))
+    conn.execute(_text("DROP TABLE used_trx"))
+    conn.execute(_text("ALTER TABLE used_trx_new RENAME TO used_trx"))
 
 
 def _migrate_locations():
@@ -168,6 +260,10 @@ def _ensure_production_defaults():
     for key, value in defaults.items():
         if Setting.query.get(key) is None:
             db.session.add(Setting(key=key, value=value))
+    import secrets
+    if Setting.query.get("alert_token") is None:
+        db.session.add(Setting(key="alert_token",
+                               value=secrets.token_urlsafe(24)))  # 32 chars
     if User.query.filter_by(role="admin").first() is None:
         admin = User(public_id="KN-1", name="Admin", phone="03115021212",
                      role="admin", city="chiniot",

@@ -7,8 +7,9 @@ import os
 from models import (db, User, Listing, ContactRequest, Setting, get_setting,
                     SUSPICIOUS_MIN_VIEWS, SUSPICIOUS_MIN_CANCELLATIONS,
                     Draw, TokenLedger, token_balance, award_tokens, TOKEN_DEAL_ENTRY,
-                    Hostel, hostel_free_slots, hostel_proof_files,
-                    hostel_proof_types, HOSTEL_SECURITY_FEE)
+                    Hostel, hostel_free_slots, hostel_proof_files, UsedTrx,
+                    hostel_proof_types, HOSTEL_SECURITY_FEE, VisitStat,
+                    visit_stats)
 from routes_lucky import run_weighted_draw
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, g, send_file, current_app
 from flask_login import login_required, current_user
@@ -38,9 +39,11 @@ def dashboard():
         "users": User.query.count(),
         "pending_listings": Listing.query.filter_by(status="pending").count(),
         "pending_hostels": Hostel.query.filter_by(status="pending").count(),
-        "in_review": ContactRequest.query.filter_by(status="in_review").count(),
+        "in_review": ContactRequest.query.filter(
+            ContactRequest.status.in_(["in_review", "needs_review"])).count(),
         "unlocked": ContactRequest.query.filter_by(status="unlocked").count(),
         "approved_listings": Listing.query.filter_by(status="approved").count(),
+        "pending_photos": Listing.query.filter_by(photo_status="pending").count(),
         "flagged_listings": (Listing.query
                              .filter(Listing.view_count >= SUSPICIOUS_MIN_VIEWS)
                              .filter(~Listing.contact_requests
@@ -48,6 +51,10 @@ def dashboard():
                              .count()),
         "warned_users": User.query.filter(User.warnings > 0).count(),
     }
+    vstats = visit_stats()
+    stats.update({"visitors_total": vstats["total"],
+                  "visitors_today": vstats["today"],
+                  "visitors_week": vstats["week"]})
     return render_template("admin/dashboard.html", stats=stats)
 
 
@@ -204,6 +211,39 @@ def hostels():
                            fee_amount=HOSTEL_SECURITY_FEE)
 
 
+@bp.route("/photos")
+@admin_required
+def photo_review():
+    """Photo review queue — listings whose photos await approval."""
+    pending = (Listing.query.filter_by(photo_status="pending")
+               .order_by(Listing.created_at.desc()).all())
+    return render_template("admin/photos.html", pending=pending)
+
+
+@bp.route("/photos/<int:lid>/approve", methods=["POST"])
+@admin_required
+def approve_photos(lid):
+    listing = Listing.query.get_or_404(lid)
+    listing.photo_status = "approved"
+    listing.photo_flag = ""
+    db.session.commit()
+    flash(_t("photo_approved_msg"))
+    return redirect(url_for("admin.photo_review"))
+
+
+@bp.route("/photos/<int:lid>/reject", methods=["POST"])
+@admin_required
+def reject_photos(lid):
+    listing = Listing.query.get_or_404(lid)
+    listing.photo_status = "rejected"
+    reason = (request.form.get("reason") or "").strip()
+    if reason:
+        listing.rejection_reason = reason
+    db.session.commit()
+    flash(_t("photo_rejected_msg"))
+    return redirect(url_for("admin.photo_review"))
+
+
 @bp.route("/hostels/<int:hid>/approve", methods=["POST"])
 @admin_required
 def approve_hostel(hid):
@@ -254,6 +294,10 @@ def verify_hostel_fee(hid):
     if hostel.fee_due and hostel.fee_screenshot and not hostel.fee_paid:
         hostel.fee_paid = True
         hostel.fee_paid_at = datetime.utcnow()
+        # Claim the typed TID so it can't be replayed on another fee/deal.
+        if hostel.fee_tid and UsedTrx.query.get(hostel.fee_tid) is None:
+            db.session.add(UsedTrx(trx_id=hostel.fee_tid, hostel_id=hostel.id,
+                                   side="hostel_fee"))
         db.session.commit()
         flash(_t("fee_verified_msg"))
     return redirect(url_for("admin.hostels"))
@@ -273,23 +317,10 @@ def payments():
 @admin_required
 def verify_payment(rid):
     req = ContactRequest.query.get_or_404(rid)
-    if req.status == "in_review":
-        req.status = "unlocked"
-        req.verified_at = datetime.utcnow()
-        # Snapshot dealer economics at unlock time.
-        owner = req.listing.landlord if req.listing else None
-        if owner and owner.is_dealer() and owner.is_active:
-            req.dealer_id = owner.id
-            req.dealer_earning = req.dealer_cut
-        # Lucky-draw hook: both sides earn free tokens on a completed deal.
-        award_tokens(req.renter_id, TOKEN_DEAL_ENTRY, "deal_entry")
-        award_tokens(req.landlord_id, TOKEN_DEAL_ENTRY, "deal_entry")
+    if req.status in ("in_review", "needs_review"):
+        from payment_guard import unlock_request
+        unlock_request(req)  # dealer snapshot + tokens + notify included
         db.session.commit()
-        try:
-            from mailer import notify_unlocked
-            notify_unlocked(req)
-        except Exception:
-            pass
         flash(_t("verified_msg"))
     return redirect(url_for("admin.payments"))
 
@@ -298,7 +329,7 @@ def verify_payment(rid):
 @admin_required
 def reject_payment(rid):
     req = ContactRequest.query.get_or_404(rid)
-    if req.status == "in_review":
+    if req.status in ("in_review", "needs_review"):
         req.status = "rejected"
         db.session.commit()
         flash(_t("rejected_msg"))
@@ -389,4 +420,16 @@ def settings():
         easypaisa_number=get_setting("easypaisa_number"),
         upaisa_number=get_setting("upaisa_number"),
         hbl_account=get_setting("hbl_account"),
+        alert_token=get_setting("alert_token"),
     )
+
+
+@bp.route("/visitors/reset", methods=["POST"])
+@login_required
+def visitors_reset():
+    if not getattr(current_user, "is_admin", False):
+        abort(403)
+    VisitStat.query.delete()
+    db.session.commit()
+    flash(_t("visitors_reset_done"))
+    return redirect(url_for("admin.dashboard"))

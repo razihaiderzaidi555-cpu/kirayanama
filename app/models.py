@@ -13,8 +13,8 @@ db = SQLAlchemy()
 CITIES = sorted(district_slugs())
 PROPERTY_TYPES = ["house", "shop", "portion", "room"]
 LISTING_STATUS = ["pending", "approved", "rejected"]
-REQUEST_STATUS = ["pending_yes", "awaiting_payment", "in_review", "unlocked",
-                  "rejected", "cancelled"]
+REQUEST_STATUS = ["pending_yes", "awaiting_payment", "in_review", "needs_review",
+                  "unlocked", "rejected", "cancelled"]
 COMMISSION_RATE = 0.15  # per side; platform total = 30% of monthly rent
 DEALER_DEFAULT_SHARE = 5.0  # percentage POINTS of rent paid to dealer on their deals
 SUSPICIOUS_MIN_VIEWS = 20  # views with zero unlocks -> flag listing
@@ -48,6 +48,11 @@ class Hostel(db.Model):
     fee_paid = db.Column(db.Boolean, default=False)  # admin-verified Rs 2000 security fee
     fee_screenshot = db.Column(db.String(255), nullable=True)
     fee_paid_at = db.Column(db.DateTime, nullable=True)
+    # hostel fee auto-verification (2026-10-07): typed TID + OCR state
+    fee_tid = db.Column(db.String(32), default="")
+    fee_company = db.Column(db.String(16), default="")
+    fee_verified = db.Column(db.Boolean, default=False)  # auto-verified by payment_guard
+    fee_review_reason = db.Column(db.String(40), default="")  # reason code if not auto-verified
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     owner = db.relationship("User", backref="hostels")
@@ -169,6 +174,10 @@ class Listing(db.Model):
     location_lng = db.Column(db.Float, nullable=True)
     # landlord closed the listing after renting out — hidden from public browse
     is_closed = db.Column(db.Boolean, default=False)
+    # photo review queue (anti commission-bypass): photos must be approved
+    # before the listing is publicly visible. 'pending'|'approved'|'rejected'
+    photo_status = db.Column(db.String(20), default="pending")
+    photo_flag = db.Column(db.String(40), default="")  # e.g. 'phone_detected'
     property_type = db.Column(db.String(20), default="house")
     bedrooms = db.Column(db.Integer, default=0)
     bathrooms = db.Column(db.Integer, default=0)
@@ -213,6 +222,15 @@ class ContactRequest(db.Model):
     landlord_shot = db.Column(db.String(255), nullable=True)
     renter_paid_at = db.Column(db.DateTime, nullable=True)
     landlord_paid_at = db.Column(db.DateTime, nullable=True)
+    # automatic payment verification (payment_guard): per-side state
+    renter_verified = db.Column(db.Boolean, default=False)
+    landlord_verified = db.Column(db.Boolean, default=False)
+    renter_review_reason = db.Column(db.String(40), default="")
+    landlord_review_reason = db.Column(db.String(40), default="")
+    renter_tid = db.Column(db.String(32), default="")
+    landlord_tid = db.Column(db.String(32), default="")
+    renter_company = db.Column(db.String(16), default="")
+    landlord_company = db.Column(db.String(16), default="")
     verified_at = db.Column(db.DateTime, nullable=True)
     cancelled_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -394,3 +412,63 @@ def ensure_referral_code(user):
     """Backfill-safe: referral_code mirrors the unique public_id."""
     if user and not user.referral_code:
         user.referral_code = user.public_id
+
+
+class UsedTrx(db.Model):
+    """Globally-claimed transaction IDs — a TID can only ever pay for one
+    thing (one deal side or one hostel fee). Replays are rejected upfront.
+
+    Exactly one of contact_request_id / hostel_id is set per row.
+    """
+    __tablename__ = "used_trx"
+    trx_id = db.Column(db.String(64), primary_key=True)
+    contact_request_id = db.Column(db.Integer, db.ForeignKey("contact_requests.id"),
+                                  nullable=True)
+    side = db.Column(db.String(10), nullable=False, default="")  # renter|landlord|hostel_fee
+    hostel_id = db.Column(db.Integer, db.ForeignKey("hostels.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class VisitStat(db.Model):
+    """Daily visitor counter (one row per day)."""
+    __tablename__ = "visit_stats"
+    day = db.Column(db.String(10), primary_key=True)  # YYYY-MM-DD
+    count = db.Column(db.Integer, default=0, nullable=False)
+
+
+def _today_str():
+    return datetime.utcnow().strftime("%Y-%m-%d")
+
+
+def record_visit():
+    """Increment today's counter. Returns (today_count, total_count)."""
+    today = _today_str()
+    row = VisitStat.query.get(today)
+    if row is None:
+        row = VisitStat(day=today, count=0)
+        db.session.add(row)
+    row.count = (row.count or 0) + 1
+    db.session.commit()
+    return row.count, visit_total()
+
+
+def visit_total():
+    total = (db.session.query(db.func.coalesce(db.func.sum(VisitStat.count), 0))
+             .scalar())
+    return int(total or 0)
+
+
+def visit_counts():
+    """(today, total) without incrementing — for pages that skip counting."""
+    today = _today_str()
+    row = VisitStat.query.get(today)
+    return (row.count if row else 0), visit_total()
+
+
+def visit_stats():
+    """today / total / last-7-days for the admin dashboard."""
+    today, total = visit_counts()
+    week_ago = (datetime.utcnow() - timedelta(days=6)).strftime("%Y-%m-%d")
+    week = (db.session.query(db.func.coalesce(db.func.sum(VisitStat.count), 0))
+            .filter(VisitStat.day >= week_ago).scalar())
+    return {"today": today, "total": total, "week": int(week or 0)}

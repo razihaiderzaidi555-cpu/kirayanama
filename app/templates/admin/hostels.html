@@ -20,8 +20,11 @@
   <p>{{ t('fee_status') }}:
     {% if not h.fee_due %}<span class="badge badge-green">{{ t('fee_not_due') }}</span>
     {% elif h.fee_paid %}<span class="badge badge-green">{{ t('fee_paid_label') }}</span>
+      {% if h.fee_verified %}<small>{{ t('auto_verified_badge') }}</small>{% endif %}
     {% elif h.fee_screenshot %}<span class="badge badge-yellow">{{ t('fee_unpaid') }} — {{ t('view') }}:
       <a href="{{ url_for('static', filename='uploads/fees/' + h.fee_screenshot) }}" target="_blank">{{ t('upload_fee_shot') }}</a></span>
+      {% if h.fee_review_reason %}<small>{{ t('st_needs_review') }}: {{ t('reason_' + h.fee_review_reason) }}</small>{% endif %}
+      {% if h.fee_tid %}<small>TID: {{ h.fee_tid }}{% if h.fee_company %} ({{ h.fee_company }}){% endif %}</small>{% endif %}
       <form method="post" action="{{ url_for('admin.verify_hostel_fee', hid=h.id) }}" style="display:inline">
         <button type="submit" class="btn btn-primary btn-small">{{ t('fee_verified_msg') }}</button>
       </form>

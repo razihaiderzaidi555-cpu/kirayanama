@@ -10,6 +10,11 @@
     <p>{{ t('payment_instructions') }}</p>
     <form method="post" action="{{ url_for('hostel.fee', hid=hostel.id) }}" enctype="multipart/form-data">
       <div class="form-group">
+        <label for="tid">{{ t('tid_label') }}</label>
+        <input id="tid" name="tid" type="text" inputmode="numeric" required
+               placeholder="{{ t('tid_hint') }}">
+      </div>
+      <div class="form-group">
         <label for="screenshot">{{ t('upload_fee_shot') }}</label>
         <input id="screenshot" name="screenshot" type="file" accept="image/*" required>
       </div>

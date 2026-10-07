@@ -140,10 +140,12 @@ with app.app_context():
     r = client.get("/hostel/%d/fee" % h51.id)
     check("fee page loads", r.status_code == 200)
     r = client.post("/hostel/%d/fee" % h51.id, data={
+        "tid": "99998888",
         "screenshot": png_file("fee.png")}, content_type="multipart/form-data")
     h51 = Hostel.query.get(h51.id)
     check("fee screenshot saved, not yet paid",
           bool(h51.fee_screenshot) and not h51.fee_paid)
+    check("fee tid recorded", h51.fee_tid == "99998888")
     client.get("/logout")
 
     # --- admin: fee verify + approval queue ---

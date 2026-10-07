@@ -13,7 +13,7 @@
 </div>
 <nav class="nav">
   <div class="container nav-inner">
-    <a class="brand" href="{{ url_for('public.home') }}">🏠 {{ t('app_name') }}</a>
+    <a class="brand" href="{{ url_for('public.home') }}">🏠 {{ t('app_name') }}<span class="tm-mark">™</span></a>
     <div class="nav-links">
       <a href="{{ url_for('public.listings_page') }}">{{ t('nav_browse') }}</a>
       <a href="{{ url_for('hostel.browse') }}">{{ t('nav_hostels') }}</a>
@@ -52,6 +52,7 @@
     <p class="brandline">🏠 {{ t('app_name') }}</p>
     <p>{{ t('footer_note') }}</p>
     <p class="muted">{{ t('tagline') }}</p>
+    <p class="muted">👁️ {{ t('visitors_today') }}: {{ visitors_today }} | {{ t('visitors_total') }}: {{ visitors_total }}</p>
     <p><a href="{{ url_for('public.sharait') }}">📜 شرائط و ضوابط</a></p>
     <p class="wa-contact">
       <a href="https://wa.me/923700651105" target="_blank" rel="noopener" aria-label="{{ t('whatsapp_us') }}">

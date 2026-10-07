@@ -19,7 +19,9 @@
   {% if h.fee_due %}
   <p>{{ t('fee_status') }}:
     {% if h.fee_paid %}<span class="badge badge-green">{{ t('fee_paid_label') }}</span>
+      {% if h.fee_verified %}<small>{{ t('auto_verified_badge') }}</small>{% endif %}
     {% elif h.fee_screenshot %}<span class="badge badge-yellow">{{ t('status_pending') }}</span>
+      {% if h.fee_review_reason %}<small>{{ t('reason_' + h.fee_review_reason) }}</small>{% endif %}
     {% else %}<span class="badge badge-red">{{ t('fee_unpaid') }} — Rs 2000</span>{% endif %}
   </p>
   {% else %}
