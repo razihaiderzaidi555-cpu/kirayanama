@@ -51,14 +51,15 @@ with app.app_context():
     check("register tehsil saved", naya.city == "faisalabad-city")
     client.get("/logout")
 
-    # legacy flat city still resolves (backward compat) — unit level, since
-    # locked-district signups now get the construction page (geo-gating).
+    # legacy flat city still resolves (backward compat) — unit level; bhuwana
+    # now lands in OPEN chiniot under the 3-division default, so the
+    # locked-district signup check uses multan (still locked) instead.
     from punjab_divisions import resolve_location as _rl
     check("legacy city resolves (unit)", _rl(city="bhuwana") == ("faisalabad", "chiniot", "bhuwana"))
     r = client.post("/register", data={"name": "Purana", "phone": "03000000006",
         "email": "purana@test.com", "password": "pass1234", "role": "renter",
-        "city": "bhuwana"})
-    check("locked-district legacy signup -> construction",
+        "division": "multan", "district": "multan", "tehsil": "multan-city"})
+    check("locked-district signup -> construction",
           r.status_code == 200 and "جلد آ رہا ہے" in r.data.decode())
     check("locked-district signup creates no user",
           User.query.filter_by(phone="03000000006").first() is None)
@@ -171,8 +172,9 @@ with app.app_context():
     check("sitemap has division urls", "/division/lahore" in r.data.decode())
 
     # invalid triple on listing form -> graceful fallback, no crash
-    # (geo-gating: the garbage triple falls back to locked chiniot, so the
-    # submission is rejected with the construction page, never silently listed)
+    # (geo-gating: the garbage triple falls back to chiniot, which is OPEN
+    # under the 3-division default — the listing lands in a visible city,
+    # never an invisible one)
     buf3 = io.BytesIO(); img.save(buf3, "PNG"); buf3.seek(0)
     r = client.post("/dashboard/listings/new", data={
         "title_ur": "غلط مقام", "monthly_rent": "9000",
@@ -181,8 +183,9 @@ with app.app_context():
         "photos": (buf3, "test3.png")}, content_type="multipart/form-data",
         follow_redirects=True)
     bad = Listing.query.filter_by(title_ur="غلط مقام").first()
-    check("invalid triple -> construction, no listing",
-          bad is None and "جلد آ رہا ہے" in r.data.decode())
+    check("invalid triple -> falls back to open chiniot, listed visibly",
+          bad is not None and bad.city == "chiniot"
+          and "جلد آ رہا ہے" not in r.data.decode())
 
     # --- OTP forgot password flow (mock email as sent) ---
     import mailer
