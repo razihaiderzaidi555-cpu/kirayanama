@@ -1,14 +1,15 @@
 {% extends "base.html" %}
-{% block title %}{{ t('hostel_fee_due_title') }}{% endblock %}
+{% block title %}{{ page_title }}{% endblock %}
 {% block content %}
 <div class="container">
   <div class="card">
-    <h1>{{ t('hostel_fee_due_title') }}</h1>
-    <p>{{ t('hostel_fee_due_msg') }}</p>
-    <p><strong>{{ t('hostel_fee_info') }}</strong></p>
+    <h1>{{ page_title }}</h1>
+    <p>{{ page_msg }}</p>
+    <p><strong>{{ fee_info }}</strong></p>
+    <p class="muted">{{ t('hostel_renewal_policy') }}</p>
     <p class="muted">{{ t('platform_numbers') }}: {{ t('jazzcash') }}: {{ jazzcash }} · {{ t('easypaisa') }}: {{ easypaisa }} · {{ t('upaisa') }}: {{ upaisa }} · {{ t('hbl') }}: {{ hbl }}</p>
     <p>{{ t('payment_instructions') }}</p>
-    <form method="post" action="{{ url_for('hostel.fee', hid=hostel.id) }}" enctype="multipart/form-data">
+    <form method="post" action="{{ url_for('hostel.fee', hid=hostel.id) }}{% if is_renewal %}?renew=1{% endif %}" enctype="multipart/form-data">
       <div class="form-group">
         <label for="tid">{{ t('tid_label') }}</label>
         <input id="tid" name="tid" type="text" inputmode="numeric" required
