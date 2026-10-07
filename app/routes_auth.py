@@ -17,6 +17,8 @@ def T(key):
 def _home_for(user):
     if user.role in ("landlord", "dealer", "admin"):
         return url_for("landlord.dashboard")
+    if user.role == "hostel_owner":
+        return url_for("hostel.dashboard")
     return "/"
 
 
