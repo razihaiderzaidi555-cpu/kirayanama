@@ -13,9 +13,10 @@
 </div>
 <nav class="nav">
   <div class="container nav-inner">
-    <a class="brand" href="{{ url_for('public.home') }}">🏠 {{ t('app_name') }}<span class="tm-mark">™</span></a>
+    <a class="brand" href="{{ url_for('public.home') }}">🏠 {{ t('app_name') }}</a>
     <div class="nav-links">
       <a href="{{ url_for('public.listings_page') }}">{{ t('nav_browse') }}</a>
+      <a href="{{ url_for('hostel.browse') }}">{{ t('nav_hostels') }}</a>
       <a href="{{ url_for('public.divisions_page') }}">{{ t('browse_divisions') }}</a>
       <a href="{{ url_for('lucky.lucky_draw') }}">🎡 {{ t('nav_luckydraw') }}</a>
       {% if current_user.is_authenticated %}
@@ -23,6 +24,9 @@
         <a href="{{ url_for('auth.profile') }}">{{ t('profile_title') }}</a>
         {% if current_user.role in ('landlord','dealer','admin') %}
         <a href="{{ url_for('landlord.dashboard') }}">{{ t('nav_dashboard') }}</a>
+        {% endif %}
+        {% if current_user.role in ('hostel_owner','admin') %}
+        <a href="{{ url_for('hostel.dashboard') }}">{{ t('hostel_owner_dashboard') }}</a>
         {% endif %}
         {% if current_user.is_admin() %}
         <a href="{{ url_for('admin.dashboard') }}">{{ t('nav_admin') }}</a>
@@ -45,9 +49,8 @@
 </main>
 <footer class="footer">
   <div class="container">
-    <p class="brandline">🏠 {{ t('app_name') }}<span class="tm-mark">™</span></p>
+    <p class="brandline">🏠 {{ t('app_name') }}</p>
     <p>{{ t('footer_note') }}</p>
-    <p class="muted">👁️ {{ t('visitors_today') }}: {{ visitors_today }} | {{ t('visitors_total') }}: {{ visitors_total }}</p>
     <p class="muted">{{ t('tagline') }}</p>
     <p><a href="{{ url_for('public.sharait') }}">📜 شرائط و ضوابط</a></p>
     <p class="wa-contact">
