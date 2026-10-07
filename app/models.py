@@ -436,7 +436,17 @@ def get_setting(key, default=""):
 # (property browse + hostel browse + registrations). Everything else renders
 # a friendly "coming soon" page. Razi opens a new city by adding its district
 # slug in Admin -> Settings — no code changes needed.
-OPEN_DISTRICTS_DEFAULT = "lahore,faisalabad,sargodha"
+#
+# 2026-10-07 correction: Razi meant 3 FULL DIVISIONS (Faisalabad, Sargodha,
+# Lahore = 12 districts), not 3 district-cities. OPEN_DISTRICTS_OLD_DEFAULT
+# is the previous default, used by the one-time migration in app.py — any
+# live DB still holding it gets upgraded; customized values are untouched.
+OPEN_DISTRICTS_DEFAULT = (
+    "faisalabad,chiniot,jhang,toba-tek-singh,"
+    "sargodha,bhakkar,khushab,mianwali,"
+    "lahore,kasur,nankana-sahib,sheikhupura"
+)
+OPEN_DISTRICTS_OLD_DEFAULT = "lahore,faisalabad,sargodha"
 
 
 def open_district_slugs():
