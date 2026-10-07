@@ -200,5 +200,19 @@ with app.app_context():
     check("hostel keys in ur+en",
           all(k in TRANSLATIONS["ur"] and k in TRANSLATIONS["en"] for k in keys))
 
+    # --- browse page owner CTA ---
+    r = client.get("/hostels")
+    check("browse CTA link to register", b'href="/hostel/register"' in r.data)
+    check("browse CTA ur text", "ہاسٹل مالک ہیں؟".encode("utf-8") in r.data)
+    check("browse CTA already-registered line",
+          "لاگ اِن سے لاگ اِن کریں".encode("utf-8") in r.data)
+    r = client.get("/hostels?lang=en")
+    check("browse CTA en text", b"Own a hostel? Register your hostel here" in r.data)
+    from translations import TRANSLATIONS as _TR2
+    check("CTA keys in ur+en",
+          all(k in _TR2["ur"] and k in _TR2["en"]
+              for k in ("hostel_owner_cta", "hostel_owner_cta_btn",
+                        "hostel_already_registered")))
+
 print("\n%d passed, %d failed" % (len(passed), len(failed)))
 sys.exit(1 if failed else 0)
