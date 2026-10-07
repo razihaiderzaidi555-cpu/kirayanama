@@ -1,8 +1,9 @@
 """Geo-gating tests: city-by-city launch (2026-10-07).
 
-Only Lahore, Faisalabad, Sargodha are open (default `open_districts`
-setting). All other districts render a friendly construction page —
-listings never leak, and locked-district submissions are rejected.
+3 FULL DIVISIONS are open by default (Faisalabad, Sargodha, Lahore =
+12 districts, default `open_districts` setting). All other districts render
+a friendly construction page — listings never leak, and locked-district
+submissions are rejected.
 """
 import os, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -11,10 +12,15 @@ tmpdir = tempfile.mkdtemp()
 os.environ["DATABASE_URL"] = "sqlite:///" + tmpdir + "/geo.db"
 os.environ["SECRET_KEY"] = "test-secret"
 
-from app import create_app
+from app import create_app, _migrate_open_districts
 from models import (db, User, Listing, Setting,
                     open_district_slugs, is_district_open,
-                    normalize_open_districts, OPEN_DISTRICTS_DEFAULT)
+                    normalize_open_districts, OPEN_DISTRICTS_DEFAULT,
+                    OPEN_DISTRICTS_OLD_DEFAULT)
+
+TWELVE = ["faisalabad", "chiniot", "jhang", "toba-tek-singh",
+          "sargodha", "bhakkar", "khushab", "mianwali",
+          "lahore", "kasur", "nankana-sahib", "sheikhupura"]
 
 app = create_app()
 app.config["TESTING"] = True
@@ -29,19 +35,42 @@ def check(name, cond):
 
 
 CONSTRUCTION = "جلد آ رہا ہے"  # "coming soon" marker on the construction page
+CONSTRUCTION_PAGE = "🚧"  # unique to the construction page itself (the hostel
+# browse dropdown legitimately lists locked districts with 🔒 markers)
 
 with app.app_context():
-    # --- setting defaults & helpers ---
-    check("default open districts",
-          open_district_slugs() == ["lahore", "faisalabad", "sargodha"])
-    check("default constant", OPEN_DISTRICTS_DEFAULT == "lahore,faisalabad,sargodha")
-    check("faisalabad open", is_district_open("faisalabad"))
-    check("lahore open", is_district_open("lahore"))
-    check("sargodha open", is_district_open("sargodha"))
-    check("chiniot locked", not is_district_open("chiniot"))
+    # --- setting defaults & helpers (3 full divisions = 12 districts) ---
+    check("default open districts", open_district_slugs() == TWELVE)
+    check("default constant", OPEN_DISTRICTS_DEFAULT == ",".join(TWELVE))
+    check("old default constant",
+          OPEN_DISTRICTS_OLD_DEFAULT == "lahore,faisalabad,sargodha")
+    for d in TWELVE:
+        check("open: " + d, is_district_open(d))
     check("multan locked", not is_district_open("multan"))
+    check("rawalpindi locked", not is_district_open("rawalpindi"))
     check("normalize", normalize_open_districts("Lahore, FAISALABAD, bogus, lahore")
           == "lahore,faisalabad")
+
+    # --- one-time migration: old 3-district default -> 12 districts ---
+    mig = Setting(key="open_districts", value="lahore,faisalabad,sargodha")
+    db.session.add(mig)
+    db.session.commit()
+    _migrate_open_districts()
+    check("old default migrated to 12 districts",
+          Setting.query.get("open_districts").value == ",".join(TWELVE))
+    check("migrated slugs live", open_district_slugs() == TWELVE)
+    _migrate_open_districts()  # second run is a no-op
+    check("migration idempotent",
+          Setting.query.get("open_districts").value == ",".join(TWELVE))
+    mig.value = "lahore,multan"  # a customized setting must be untouched
+    db.session.commit()
+    _migrate_open_districts()
+    check("customized setting untouched",
+          Setting.query.get("open_districts").value == "lahore,multan")
+    db.session.delete(mig)
+    db.session.commit()
+    check("default restored after migration tests",
+          open_district_slugs() == TWELVE)
 
     # --- seed: landlord + approved listing in open faisalabad ---
     ll = User(public_id="G-LL", name="Malik", phone="03090000001",
@@ -60,8 +89,8 @@ with app.app_context():
     lid = lst.id
     # locked-district listing seeded directly (simulates pre-gate data)
     locked_lst = Listing(title_ur="بند مکان", landlord_id=ll.id,
-                         city="chiniot", division="faisalabad",
-                         tehsil="chiniot", monthly_rent=15000,
+                         city="multan", division="multan",
+                         tehsil="multan-city", monthly_rent=15000,
                          status="approved", photo_status="approved",
                          property_type="house")
     db.session.add(locked_lst)
@@ -73,15 +102,22 @@ with app.app_context():
     check("open district page 200", r.status_code == 200)
     check("open district shows listing",
           "ٹیسٹ مکان فیصل آباد" in r.data.decode())
-    r = client.get("/city/chiniot")
+    r = client.get("/city/multan")
     body = r.data.decode()
     check("locked district -> 200 construction", r.status_code == 200)
     check("construction text present", CONSTRUCTION in body)
     check("locked district leaks zero listings",
           "ٹیسٹ مکان فیصل آباد" not in body and "بند مکان" not in body)
-    r = client.get("/city/lalian")  # legacy tehsil slug of locked chiniot
-    check("locked tehsil slug -> construction",
-          r.status_code == 200 and CONSTRUCTION in r.data.decode())
+    r = client.get("/city/chiniot")  # now OPEN under the 3-division default
+    body = r.data.decode()
+    check("chiniot now browsable",
+          r.status_code == 200 and CONSTRUCTION not in body)
+    r = client.get("/city/lalian")  # legacy tehsil slug of now-open chiniot
+    check("legacy tehsil slug follows district (open)",
+          r.status_code == 200 and CONSTRUCTION not in r.data.decode())
+    r = client.get("/city/kasur")  # spot-check: 3rd division now open
+    check("kasur now browsable",
+          r.status_code == 200 and CONSTRUCTION not in r.data.decode())
     r = client.get(f"/listing/{lid}")
     check("open listing detail 200", r.status_code == 200)
     r = client.get(f"/listing/{locked_lid}")
@@ -91,26 +127,31 @@ with app.app_context():
     check("home hides locked listings", "بند مکان" not in r.data.decode())
 
     # --- search/filter gate ---
-    r = client.get("/listings?district=chiniot")
+    r = client.get("/listings?district=multan")
     check("search locked district -> construction",
           r.status_code == 200 and CONSTRUCTION in r.data.decode())
-    r = client.get("/listings?district=faisalabad")
-    check("search open district 200", r.status_code == 200)
+    r = client.get("/listings?district=jhang")
+    check("search open district (jhang) 200",
+          r.status_code == 200 and CONSTRUCTION not in r.data.decode())
 
     # --- division page: locked districts marked ---
-    r = client.get("/division/faisalabad")
+    r = client.get("/division/multan")
     body = r.data.decode()
     check("division page 200", r.status_code == 200)
     check("locked district marked coming-soon",
-          "chiniot" in body and CONSTRUCTION in body)
+          "lodhran" in body and CONSTRUCTION in body)
     check("division featured hides locked listings",
           "بند مکان" not in body)
+    r = client.get("/division/faisalabad")
+    body = r.data.decode()
+    check("faisalabad division fully open (no coming-soon)",
+          "chiniot" in body and "ٹیسٹ مکان فیصل آباد" in body)
 
     # --- listing POST gates (landlord) ---
     client.post("/login", data={"phone": "03090000001", "password": "pass1234"})
     r = client.post("/dashboard/listings/new", data={
         "title_ur": "بند شہر مکان", "monthly_rent": "10000",
-        "division": "faisalabad", "district": "chiniot", "tehsil": "chiniot",
+        "division": "multan", "district": "multan", "tehsil": "multan-city",
         "property_type": "house"})
     check("locked listing POST -> construction",
           r.status_code == 200 and CONSTRUCTION in r.data.decode())
@@ -128,8 +169,8 @@ with app.app_context():
     # --- user registration gate ---
     r = client.post("/register", data={
         "name": "Locked", "phone": "03090000002", "password": "pass1234",
-        "role": "renter", "division": "faisalabad", "district": "chiniot",
-        "tehsil": "chiniot"})
+        "role": "renter", "division": "multan", "district": "multan",
+        "tehsil": "multan-city"})
     check("locked-district signup -> construction",
           r.status_code == 200 and CONSTRUCTION in r.data.decode())
     check("locked signup creates no user",
@@ -145,20 +186,23 @@ with app.app_context():
     r = client.get("/hostels/faisalabad")
     check("hostel open district 200", r.status_code == 200)
     r = client.get("/hostels/chiniot")
-    check("hostel locked district -> construction",
-          r.status_code == 200 and CONSTRUCTION in r.data.decode())
-    r = client.get("/hostels?district=chiniot")
+    check("hostel chiniot now open",
+          r.status_code == 200 and CONSTRUCTION_PAGE not in r.data.decode())
+    r = client.get("/hostels?district=multan")
     check("hostel query locked -> construction",
           r.status_code == 200 and CONSTRUCTION in r.data.decode())
     r = client.get("/hostels/multan")
     check("hostel multan -> construction",
           r.status_code == 200 and CONSTRUCTION in r.data.decode())
+    r = client.get("/hostels/kasur")
+    check("hostel kasur now open",
+          r.status_code == 200 and CONSTRUCTION_PAGE not in r.data.decode())
 
     # --- hostel registration gate ---
     r = client.post("/hostel/register", data={
         "name": "H", "phone": "03090000004", "password": "pass1234",
         "cnic": "35202-1111111-1", "hostel_name_ur": "بند ہاسٹل",
-        "district": "chiniot", "address": "Addr"})
+        "district": "multan", "address": "Addr"})
     check("hostel register locked -> construction",
           r.status_code == 200 and CONSTRUCTION in r.data.decode())
     check("hostel not created",
@@ -166,18 +210,18 @@ with app.app_context():
 
     # --- flipping the admin setting opens a city ---
     s = Setting(key="open_districts",
-                value="lahore,faisalabad,sargodha,chiniot")
+                value=",".join(TWELVE + ["multan"]))
     db.session.add(s)
     db.session.commit()
-    check("setting flip opens chiniot", is_district_open("chiniot"))
-    r = client.get("/city/chiniot")
+    check("setting flip opens multan", is_district_open("multan"))
+    r = client.get("/city/multan")
     body = r.data.decode()
     check("flipped city browsable",
           r.status_code == 200 and CONSTRUCTION not in body
           and "بند مکان" in body)
-    s.value = "lahore,faisalabad,sargodha"
+    s.value = ",".join(TWELVE)
     db.session.commit()
-    check("restore locks chiniot", not is_district_open("chiniot"))
+    check("restore locks multan", not is_district_open("multan"))
 
     # --- admin settings page round-trip ---
     admin = User(public_id="G-AD", name="Admin", phone="03090000009",
