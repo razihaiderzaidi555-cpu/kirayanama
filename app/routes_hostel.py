@@ -1,14 +1,18 @@
 """Hostel owner system (Phase 2, 2026-10-07). Blueprint 'hostel', no url_prefix.
 
 Flow: public registration (name/phone/password + CNIC + hostel name/district/
-address + >=1 photo) -> CNIC copy + >=2 ownership proofs -> optional Rs 2000
-security-fee screenshot (only after the district's 50 free slots are used up)
--> admin approval queue -> public browse/detail.
+address + >=1 photo) -> CNIC copy + >=2 ownership proofs -> optional
+security-fee screenshot (only after the district's 50 free slots are used up;
+amount = hostel_fee_amount admin setting) -> admin approval queue (approval
+sets reg_expires_at = +365 days) -> public browse/detail.
+Yearly renewal (2026-10-07): every registration expires after a year and must
+be renewed at the then-current rate; expired hostels are hidden from browse
+until renewed.
 """
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, date
 from functools import wraps
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
@@ -17,7 +21,9 @@ from flask_login import login_user, logout_user, current_user, login_required
 
 from models import (db, User, Hostel, HostelPhoto, UsedTrx, next_public_id,
                     hostel_free_slots, hostel_fee_due_for, hostel_proof_files,
-                    hostel_proof_types, HOSTEL_PROOF_TYPES, HOSTEL_SECURITY_FEE,
+                    hostel_proof_types, HOSTEL_PROOF_TYPES, hostel_fee_amount,
+                    hostel_is_expired, hostel_renewal_expiry,
+                    hostel_show_welcome_notice,
                     ensure_referral_code, get_setting)
 from punjab_divisions import district_slugs, DIVISIONS
 from translations import get_text
@@ -221,18 +227,42 @@ def photos(hid):
 @hostel_owner_required
 def fee(hid):
     hostel = _get_hostel_or_403(hid)
-    if not hostel.fee_due or hostel.fee_paid:
+    amt = hostel_fee_amount()
+    # Yearly renewal: an expired registration can always be renewed here at
+    # the CURRENT rate. The first-50-free quota applies to first registration
+    # only — never to renewals.
+    is_renewal = request.args.get("renew") == "1" and hostel_is_expired(hostel)
+    if not is_renewal and (not hostel.fee_due or hostel.fee_paid):
         return redirect(url_for("hostel.dashboard"))
 
     def _form():
+        if is_renewal:
+            page_title = T("renewal_fee_title")
+            page_msg = T("renewal_fee_msg").format(amount=amt)
+        else:
+            page_title = T("hostel_fee_due_title")
+            page_msg = T("hostel_fee_due_msg").format(amount=amt)
         return render_template(
             "hostel/fee.html", hostel=hostel,
+            page_title=page_title, page_msg=page_msg,
+            fee_info=T("hostel_fee_info").format(amount=amt),
+            fee_amount=amt, is_renewal=is_renewal,
             jazzcash=get_setting("jazzcash_number"),
             easypaisa=get_setting("easypaisa_number"),
             upaisa=get_setting("upaisa_number"),
             hbl=get_setting("hbl_account"))
 
     if request.method == "POST":
+        if is_renewal:
+            # Fresh payment state for the renewal attempt — the old
+            # screenshot/TID must not block the admin-manual-verify path.
+            hostel.fee_screenshot = None
+            hostel.fee_paid = False
+            hostel.fee_verified = False
+            hostel.fee_review_reason = ""
+            hostel.fee_tid = ""
+            hostel.fee_company = ""
+            hostel.fee_paid_at = None
         # --- typed Transaction ID: required, 8-20 digits, globally unique ---
         tid = normalize_digits((request.form.get("tid") or "").strip())
         if not re.fullmatch(r"\d{8,20}", tid):
@@ -255,16 +285,16 @@ def fee(hid):
             return _form()
         hostel.fee_screenshot = name
         # --- automatic fee verification (fail-open: any crash -> admin review) ---
-        # OCR checks the exact Rs 2000 amount + one of Razi's payment
-        # identifiers; the TYPED tid takes precedence over any OCR-extracted
-        # TrxID for the uniqueness claim.
+        # OCR checks the exact expected amount (current admin-set rate) + one
+        # of Razi's payment identifiers; the TYPED tid takes precedence over
+        # any OCR-extracted TrxID for the uniqueness claim.
         companies = [(key, get_setting(key + "_number" if key != "hbl" else "hbl_account"))
                      for key in ("jazzcash", "easypaisa", "upaisa", "hbl")]
         img_path = os.path.join(
             current_app.config["UPLOAD_FOLDER"], "fees", name)
         try:
             ok, _ocr_trx, reason, company = verify_payment_screenshot(
-                img_path, HOSTEL_SECURITY_FEE, companies, require_trx_id=False)
+                img_path, amt, companies, require_trx_id=False)
         except Exception:  # noqa: BLE001 - guard must never break uploads
             ok, _ocr_trx, reason, company = False, None, "ocr_error", None
         hostel.fee_tid = tid
@@ -278,8 +308,17 @@ def fee(hid):
             hostel.fee_verified = True
             hostel.fee_review_reason = ""
             hostel.fee_paid_at = datetime.utcnow()
+            if is_renewal:
+                # Renewal extends from the later of old expiry / today, so an
+                # early renewal never loses remaining days.
+                base = hostel.reg_expires_at
+                hostel.reg_expires_at = hostel_renewal_expiry(
+                    max(base, date.today()) if base else None)
             db.session.commit()
-            flash(T("fee_auto_verified"))
+            if is_renewal:
+                flash(T("renewal_done").format(date=hostel.reg_expires_at))
+            else:
+                flash(T("fee_auto_verified"))
         else:
             # Fail-open: screenshot stays queued for the admin with a reason.
             hostel.fee_verified = False
@@ -292,6 +331,17 @@ def fee(hid):
 
 # ---------------- owner dashboard ----------------
 
+@bp.route("/hostel/<int:hid>/dismiss-renewal-reminder", methods=["POST"])
+@hostel_owner_required
+def dismiss_renewal_reminder(hid):
+    """Owner dismissed the phase-2 pre-expiry reminder — it reappears
+    the next day."""
+    hostel = _get_hostel_or_403(hid)
+    hostel.renewal_dismissed_at = datetime.utcnow()
+    db.session.commit()
+    return redirect(url_for("hostel.dashboard"))
+
+
 @bp.route("/hostel/dashboard")
 @hostel_owner_required
 def dashboard():
@@ -301,15 +351,27 @@ def dashboard():
     district_slots = {h.district: hostel_free_slots(h.district)
                       for h in hostels}
     return render_template("hostel/dashboard.html", hostels=hostels,
-                           district_slots=district_slots)
+                           district_slots=district_slots,
+                           fee_amount=hostel_fee_amount(),
+                           show_welcome_notice=hostel_show_welcome_notice(
+                               current_user))
 
 
 # ---------------- public browse + detail ----------------
 
+def _visible_hostels_q():
+    """Approved AND registration not expired. Expired hostels stay hidden
+    (same as suspended) until the owner renews."""
+    today = date.today()
+    return (Hostel.query.filter_by(status="approved")
+            .filter(db.or_(Hostel.reg_expires_at.is_(None),
+                           Hostel.reg_expires_at >= today)))
+
+
 @bp.route("/hostels")
 def browse():
     district = (request.args.get("district") or "").strip()
-    q = Hostel.query.filter_by(status="approved")
+    q = _visible_hostels_q()
     if district:
         q = q.filter_by(district=district)
     hostels = q.order_by(Hostel.created_at.desc()).all()
@@ -323,7 +385,7 @@ def browse_district(district):
     if district not in district_slugs():
         from flask import abort
         abort(404)
-    hostels = (Hostel.query.filter_by(status="approved", district=district)
+    hostels = (_visible_hostels_q().filter_by(district=district)
                .order_by(Hostel.created_at.desc()).all())
     return render_template("hostel/browse.html", hostels=hostels,
                            districts=sorted(district_slugs()),
@@ -333,7 +395,7 @@ def browse_district(district):
 @bp.route("/hostel/view/<int:hid>")
 def detail(hid):
     hostel = Hostel.query.get_or_404(hid)
-    if hostel.status != "approved":
+    if hostel.status != "approved" or hostel_is_expired(hostel):
         from flask import abort
         abort(404)
     return render_template("hostel/detail.html", hostel=hostel)
