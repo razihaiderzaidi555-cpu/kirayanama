@@ -8,6 +8,10 @@
     <p class="alert alert-ok">{{ t('demo_note') }}</p>
     <form method="post" action="{{ url_for('admin.settings') }}">
       <div class="form-group">
+        <label for="hostel_fee_amount">{{ t('hostel_fee_amount') }}</label>
+        <input type="text" id="hostel_fee_amount" name="hostel_fee_amount" value="{{ hostel_fee_amount }}" dir="ltr" inputmode="numeric">
+      </div>
+      <div class="form-group">
         <label for="jazzcash_number">{{ t('jazzcash_number') }}</label>
         <input type="text" id="jazzcash_number" name="jazzcash_number" value="{{ jazzcash_number }}" dir="ltr">
       </div>
