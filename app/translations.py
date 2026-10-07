@@ -234,6 +234,15 @@ TRANSLATIONS = {
         "renewal_reminder": "Aapki hostel registration {date} ko expire ho rahi hai — barwaqt renew karwa lein.",
         "renewal_expired_note": "آپ کی رجسٹریشن ختم ہو گئی ہے — تجدید کروا لیں تاکہ آپ کا ہاسٹل دوبارہ نظر آئے۔",
         "dismiss": "بند کریں",
+        # --- geo-gating: city-by-city launch (2026-10-07) ---
+        "open_districts_label": "کھلے شہر (اضلاع)",
+        "open_districts_hint": "کامے سے الگ کریں — صرف یہ شہر سائٹ پر کھلے رہیں گے (district keys، مثلاً lahore,faisalabad,sargodha)",
+        "construction_title": "🚧 جلد آ رہا ہے",
+        "construction_heading": "کرایہ نامہ آپ کے شہر میں جلد آ رہا ہے!",
+        "construction_text": "ہم شہر بہ شہر لانچ کر رہے ہیں۔ فی الحال ہم ان شہروں میں مکمل دستیاب ہیں:",
+        "coming_soon_badge": "🔒 جلد آ رہا ہے",
+        "more_cities_soon_note": "باقی شہر جلد آ رہے ہیں",
+        "browse_open_cities": "کھلے شہر دیکھیں",
         # --- photo review queue (restored 2026-10-07) ---
         "photo_review_title": "تصاویر کی نظرثانی",
         "photo_review_hint": "نئی لسٹنگز کی تصاویر یہاں منظور یا مسترد کریں۔ تصاویر کی منظوری کے بغیر لسٹنگ عوام کو نظر نہیں آئے گی۔",
@@ -881,6 +890,15 @@ TRANSLATIONS["en"].update({
         "renewal_reminder": "Your hostel registration expires on {date} — please renew it in time.",
         "renewal_expired_note": "Your registration has expired — renew it so your hostel becomes visible again.",
         "dismiss": "Dismiss",
+        # --- geo-gating: city-by-city launch (2026-10-07) ---
+        "open_districts_label": "Open cities (districts)",
+        "open_districts_hint": "Comma-separated — only these cities stay open on the site (district keys, e.g. lahore,faisalabad,sargodha)",
+        "construction_title": "🚧 Coming soon",
+        "construction_heading": "KirayaNama is coming to your city soon!",
+        "construction_text": "We're launching city by city. We're currently fully live in:",
+        "coming_soon_badge": "🔒 Coming soon",
+        "more_cities_soon_note": "More cities coming soon",
+        "browse_open_cities": "Browse open cities",
         # --- photo review queue (restored 2026-10-07) ---
         "photo_review_title": "Photo Review",
         "photo_review_hint": "Approve or reject photos of new listings here. Listings stay hidden from the public until their photos are approved.",

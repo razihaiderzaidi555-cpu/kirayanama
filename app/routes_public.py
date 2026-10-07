@@ -9,6 +9,8 @@ from flask_login import login_required
 from urllib.parse import quote
 
 from models import db, Listing, CITIES, PROPERTY_TYPES, Draw
+from models import open_district_slugs, is_district_open
+from utils import construction_response
 from translations import get_text
 from punjab_divisions import (
     DIVISIONS, division_slugs, district_slugs, tehsil_slugs,
@@ -24,12 +26,20 @@ def _approved():
                                    is_closed=False)
 
 
+def _visible():
+    """Listings the public may see: approved AND in an open district.
+
+    Geo-gating (city-by-city launch): locked districts never leak listings
+    anywhere on the public site."""
+    return _approved().filter(Listing.city.in_(open_district_slugs()))
+
+
 @bp.route("/")
 def home():
-    latest = _approved().order_by(Listing.created_at.desc()).limit(6).all()
+    latest = _visible().order_by(Listing.created_at.desc()).limit(6).all()
     latest_draw = (Draw.query.filter_by(status="drawn")
                   .order_by(Draw.drawn_at.desc()).first())
-    div_counts = {s: _approved().filter_by(division=s).count()
+    div_counts = {s: _visible().filter_by(division=s).count()
                   for s in division_slugs()}
     return render_template("public/home.html", listings=latest,
                            latest_winner=latest_draw.winner if latest_draw else None,
@@ -40,11 +50,15 @@ def home():
 @bp.route("/city/<city>")
 def city_page(city):
     """District page. Legacy slugs keep working:
-    'chiniot' -> chiniot district; 'lalian'/'bhuwana' -> their tehsil view."""
-    listings = _approved()
+    'chiniot' -> chiniot district; 'lalian'/'bhuwana' -> their tehsil view.
+
+    Geo-gate: locked districts render the friendly construction page."""
+    listings = _visible()
     page_title = city
+    district = None
     if city in LEGACY_CITY_MAP:
         div, dist, teh = LEGACY_CITY_MAP[city]
+        district = dist
         if teh != dist:  # legacy tehsil slug -> tehsil-filtered view
             listings = listings.filter_by(tehsil=teh)
             page_title = teh
@@ -52,16 +66,20 @@ def city_page(city):
             listings = listings.filter_by(city=dist)
             page_title = dist
     elif city in district_slugs():
+        district = city
         listings = listings.filter_by(city=city)
         page_title = city
     else:
         # maybe a bare tehsil slug
         tdiv, tdist = locate_tehsil(city)
         if tdiv:
+            district = tdist
             listings = listings.filter_by(tehsil=city)
             page_title = city
         else:
             abort(404)
+    if district and not is_district_open(district):
+        return construction_response(district)
     listings = listings.order_by(Listing.created_at.desc()).all()
     # tehsil chips for the district of this page
     chip_district = None
@@ -85,14 +103,16 @@ def city_page(city):
 def division_page(division):
     if division not in DIVISIONS:
         abort(404)
+    # Geo-gate: only open districts contribute listings/counts; locked
+    # districts are still listed but marked "coming soon" (template).
     listings = (
-        _approved().filter_by(division=division)
+        _visible().filter_by(division=division)
         .order_by(Listing.created_at.desc()).all()
     )
     counts = {}
     dist_tehsils = {}
     for dist in DIVISIONS[division]["districts"]:
-        counts[dist] = _approved().filter_by(city=dist).count()
+        counts[dist] = _visible().filter_by(city=dist).count()
         dist_tehsils[dist] = [(t,) for t in tehsil_slugs(division, dist)]
     return render_template("public/division.html", division=division,
                            listings=listings, counts=counts,
@@ -122,7 +142,16 @@ def listings_page():
     max_rent = request.args.get("max_rent") or ""
     bedrooms = request.args.get("bedrooms") or ""
 
-    query = _approved()
+    # Geo-gate: an explicit locked district/tehsil filter -> construction page.
+    for _d in (district, city):
+        if _d and _d in district_slugs() and not is_district_open(_d):
+            return construction_response(_d)
+    if tehsil:
+        _tdiv, _tdist = locate_tehsil(tehsil)
+        if _tdist and not is_district_open(_tdist):
+            return construction_response(_tdist)
+
+    query = _visible()
     if division in DIVISIONS:
         query = query.filter_by(division=division)
         if district in district_slugs(division):
@@ -186,6 +215,9 @@ def listing_detail(listing_id):
     listing = Listing.query.get_or_404(listing_id)
     if listing.status != "approved" or listing.photo_status != "approved" or listing.is_closed:
         abort(404)
+    # Geo-gate: listings in locked districts are not publicly viewable.
+    if not is_district_open(listing.city):
+        return construction_response(listing.city)
     # Anti-bypass monitoring: count views (only committed for approved listings).
     listing.view_count = (listing.view_count or 0) + 1
     db.session.commit()
@@ -240,9 +272,10 @@ def sitemap():
     ]
     for d in division_slugs():
         urls.append(url_for("public.division_page", division=d, _external=True))
-    for c in district_slugs():
+    # Geo-gate: sitemap only advertises open districts and their listings.
+    for c in open_district_slugs():
         urls.append(url_for("public.city_page", city=c, _external=True))
-    for listing in _approved().all():
+    for listing in _visible().all():
         urls.append(
             url_for("public.listing_detail", listing_id=listing.id, _external=True)
         )

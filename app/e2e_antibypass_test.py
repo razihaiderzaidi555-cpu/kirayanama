@@ -29,7 +29,7 @@ def reg(name, phone, role):
     c.get("/logout")
     return c.post("/register",
                   data={"name": name, "phone": phone, "password": "pass1234",
-                        "role": role, "city": "chiniot"}, follow_redirects=True)
+                        "role": role, "city": "faisalabad"}, follow_redirects=True)
 
 
 def login(phone):
@@ -42,7 +42,7 @@ def make_listing(title_ur, desc_ur="صاف مکان", exact="گلی 5، مکان
     return c.post("/dashboard/listings/new",
                   data={"title_ur": title_ur, "title_en": "test",
                         "desc_ur": desc_ur, "desc_en": "test",
-                        "city": "chiniot", "area": "محلہ اسلام پورہ",
+                        "city": "faisalabad", "area": "محلہ اسلام پورہ",
                         "exact_address": exact, "property_type": "house",
                         "bedrooms": "3", "bathrooms": "2", "area_sqft": "1500",
                         "monthly_rent": str(rent), "photos": (png(), "h.png")},

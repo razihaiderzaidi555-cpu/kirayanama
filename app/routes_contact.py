@@ -3,7 +3,8 @@ import os
 import re
 
 from models import db, User, Listing, ContactRequest, UsedTrx, get_setting
-from utils import save_upload, normalize_digits
+from models import is_district_open
+from utils import save_upload, normalize_digits, construction_response
 from payment_guard import verify_payment_screenshot, unlock_request
 from translations import get_text
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort, g
@@ -30,6 +31,9 @@ def contact(listing_id):
     listing = Listing.query.get_or_404(listing_id)
     if listing.status != "approved" or listing.photo_status != "approved":
         abort(404)
+    # Geo-gate: locked-district listings can't start the contact flow.
+    if not is_district_open(listing.city):
+        return construction_response(listing.city)
     if listing.landlord_id == current_user.id:
         abort(400)
     existing = ContactRequest.query.filter_by(

@@ -7,7 +7,7 @@
   <label for="{{ prefix }}-division">{{ t('select_division') }}</label>
   <select id="{{ prefix }}-division" name="division" data-loc="division" data-prefix="{{ prefix }}">
     {% if allow_all %}<option value="">{{ t('all_divisions') }}</option>{% endif %}
-    {% for d in division_slugs %}
+    {% for d in (division_slugs if allow_all else open_division_slugs) %}
     <option value="{{ d }}" {% if div_value == d %}selected{% endif %}>{{ division_name(d) }}</option>
     {% endfor %}
   </select>
@@ -17,6 +17,7 @@
   <select id="{{ prefix }}-district" name="district" data-loc="district" data-prefix="{{ prefix }}">
     {% if allow_all %}<option value="">{{ t('all') }}</option>{% endif %}
   </select>
+  {% if not allow_all %}<p class="muted"><small>{{ t('more_cities_soon_note') }}</small></p>{% endif %}
 </div>
 <div class="form-group">
   <label for="{{ prefix }}-tehsil">{{ t('select_tehsil') }}</label>
@@ -42,6 +43,11 @@
   var divSel = $('division'), distSel = $('district'), tehSel = $('tehsil');
   var initDist = {{ dist_value|tojson }}, initTeh = {{ teh_value|tojson }};
   var booted = false;
+  // Geo-gating (city-by-city launch): registration forms only offer open
+  // districts. On edit forms the current (locked) value is still shown but
+  // disabled, so the district can never silently change underneath.
+  var openDistricts = {{ open_district_list|tojson }};
+  var comingSoon = {{ t('coming_soon_badge')|tojson }};
   function fillDistrict(){
     var keep = booted ? distSel.value : initDist;
     distSel.innerHTML = '';
@@ -49,9 +55,12 @@
     var div = divSel.value;
     if (div && DATA[div]){
       Object.keys(DATA[div].districts).forEach(function(ds){
+        var isOpen = openDistricts.indexOf(ds) >= 0;
+        if (!allowAll && !isOpen && ds !== initDist) return;
         var opt = document.createElement('option');
         var dd = DATA[div].districts[ds];
         opt.value = ds; opt.textContent = dd ? (dd[lang] || dd.en) : ds;
+        if (!isOpen){ opt.disabled = true; opt.textContent += ' — ' + comingSoon; }
         distSel.appendChild(opt);
       });
     }

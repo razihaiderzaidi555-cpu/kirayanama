@@ -7,7 +7,8 @@ from flask_login import LoginManager
 
 from models import db, User, CITIES
 from models import (record_visit, visit_counts, hostel_is_expired,
-                    hostel_expiry_state, hostel_show_renewal_reminder)
+                    hostel_expiry_state, hostel_show_renewal_reminder,
+                    open_district_slugs, open_division_slugs, is_district_open)
 from translations import get_text
 from punjab_divisions import (
     DIVISIONS, division_slugs, division_image, district_image, place_name, resolve_location,
@@ -94,6 +95,9 @@ def create_app():
             "hostel_is_expired": hostel_is_expired,
             "hostel_expiry_state": hostel_expiry_state,
             "hostel_show_renewal_reminder": hostel_show_renewal_reminder,
+            "open_district_list": open_district_slugs(),
+            "open_division_slugs": open_division_slugs(),
+            "is_district_open": is_district_open,
         }
 
     # blueprints (each worker owns one module; missing ones are skipped)

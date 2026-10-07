@@ -4,7 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from punjab_divisions import district_slugs
+from punjab_divisions import district_slugs, DIVISIONS
 
 db = SQLAlchemy()
 
@@ -429,6 +429,55 @@ def wheel_spins_24h(user_id):
 def get_setting(key, default=""):
     s = Setting.query.get(key)
     return s.value if s else default
+
+
+# ---------------- geo-gating: city-by-city launch (2026-10-07) ----------------
+# Only districts in the `open_districts` admin setting are live on the site
+# (property browse + hostel browse + registrations). Everything else renders
+# a friendly "coming soon" page. Razi opens a new city by adding its district
+# slug in Admin -> Settings — no code changes needed.
+OPEN_DISTRICTS_DEFAULT = "lahore,faisalabad,sargodha"
+
+
+def open_district_slugs():
+    """District slugs currently open, from the admin `open_districts`
+    setting (comma-separated). Falls back to the default trio on bad input —
+    the open list is never empty."""
+    raw = get_setting("open_districts", OPEN_DISTRICTS_DEFAULT) or ""
+    valid = set(district_slugs())
+    out = []
+    for part in raw.split(","):
+        s = part.strip().lower()
+        if s in valid and s not in out:
+            out.append(s)
+    if not out:
+        out = [s for s in OPEN_DISTRICTS_DEFAULT.split(",") if s in valid]
+    return out
+
+
+def is_district_open(slug):
+    """True when the district slug is open for listings/browsing."""
+    return (slug or "").strip().lower() in set(open_district_slugs())
+
+
+def open_division_slugs():
+    """Division slugs that have at least one open district (for
+    registration forms — fully locked divisions are not selectable)."""
+    open_d = set(open_district_slugs())
+    return [div for div, info in DIVISIONS.items()
+            if any(d in open_d for d in info.get("districts", {}))]
+
+
+def normalize_open_districts(raw):
+    """Sanitize admin input for the `open_districts` setting: lowercase,
+    comma-separated, valid district slugs only (order preserved)."""
+    valid = set(district_slugs())
+    out = []
+    for part in (raw or "").split(","):
+        s = part.strip().lower()
+        if s in valid and s not in out:
+            out.append(s)
+    return ",".join(out)
 
 
 def next_public_id():

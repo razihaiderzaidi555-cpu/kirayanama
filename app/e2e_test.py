@@ -22,7 +22,7 @@ def png():
 
 def reg(name, phone, role):
     return c.post("/register", data={"name": name, "phone": phone, "password": "pass1234",
-                                     "role": role, "city": "chiniot"}, follow_redirects=True)
+                                     "role": role, "city": "faisalabad"}, follow_redirects=True)
 
 # 1. register landlord + renter
 r = reg("Malik Ashfaq", "03011111111", "landlord"); assert r.status_code == 200, "landlord reg"
@@ -35,8 +35,8 @@ c.get("/logout")
 # 2. landlord login + create listing
 c.post("/login", data={"phone": "03011111111", "password": "pass1234"})
 r = c.post("/dashboard/listings/new",
-           data={"title_ur": "چنیوٹ میں 5 مرلہ مکان", "title_en": "5 marla house",
-                 "desc_ur": "اچھا مکان", "city": "chiniot", "area": "محلہ اسلام پورہ",
+           data={"title_ur": "فیصل آباد میں 5 مرلہ مکان", "title_en": "5 marla house",
+                 "desc_ur": "اچھا مکان", "city": "faisalabad", "area": "محلہ اسلام پورہ",
                  "property_type": "house", "bedrooms": "3", "bathrooms": "2",
                  "area_sqft": "1500", "monthly_rent": "20000",
                  "photos": (png(), "house.png")},
@@ -123,7 +123,7 @@ print("7 OK: admin verified -> unlocked, renter sees phone")
 # 8. access control: stranger cannot view request
 c.get("/logout")
 c.post("/register", data={"name": "Stranger", "phone": "03033333333", "password": "pass1234",
-                          "role": "renter", "city": "lalian"}, follow_redirects=True)
+                          "role": "renter", "city": "faisalabad"}, follow_redirects=True)
 r = c.get(f"/request/{rid}")
 assert r.status_code == 403, f"stranger blocked, got {r.status_code}"
 print("8 OK: stranger 403")
@@ -140,7 +140,7 @@ print("9 OK: admin pages + settings")
 # 10. public pages show approved listing
 c.get("/logout")
 r = c.get(f"/listing/{lid}"); assert r.status_code == 200 and "20000" in r.get_data(as_text=True) or "20,000" in r.get_data(as_text=True)
-r = c.get("/city/chiniot"); assert "5 marlہ" in r.get_data(as_text=True) or "مکان" in r.get_data(as_text=True)
+r = c.get("/city/faisalabad"); assert "5 marlہ" in r.get_data(as_text=True) or "مکان" in r.get_data(as_text=True)
 print("10 OK: public detail + city page show listing")
 
 # 11. lucky draw: signup grants 5 free tokens + referral code
@@ -166,7 +166,7 @@ for i, ph in enumerate(phones):
     html = r.get_data(as_text=True)
     assert "5" in html and "ٹوکن" in html or "tokens" in html, "referral invite note shown"
     r = c.post("/register", data={"name": f"Ref{i}", "phone": ph, "password": "pass1234",
-                                  "role": "renter", "city": "chiniot"}, follow_redirects=True)
+                                  "role": "renter", "city": "faisalabad"}, follow_redirects=True)
     assert r.status_code == 200, f"referral reg {ph}"
     with app.app_context():
         nu = User.query.filter_by(phone=ph).first()

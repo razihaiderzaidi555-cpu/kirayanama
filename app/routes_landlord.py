@@ -8,10 +8,10 @@ from flask_login import login_required, current_user
 
 from models import (db, User, Listing, ListingPhoto, ContactRequest,
                     next_public_id, CITIES, PROPERTY_TYPES,
-                    token_balance, ensure_referral_code)
+                    token_balance, ensure_referral_code, is_district_open)
 from punjab_divisions import (DIVISIONS, division_slugs, resolve_location,
                               is_valid_location)
-from utils import save_upload, find_phone_numbers
+from utils import save_upload, find_phone_numbers, construction_response
 from translations import get_text
 
 bp = Blueprint("landlord", __name__, url_prefix="/dashboard")
@@ -213,6 +213,10 @@ def dashboard():
 def listing_new():
     if request.method == "POST":
         data = _read_listing_form()
+        # Geo-gate: listings only in open districts (hard gate — never
+        # silently accept an invisible listing).
+        if data["city"] and not is_district_open(data["city"]):
+            return construction_response(data["city"])
         err = _validate_listing_form(data)
         if not err and not _has_uploaded_photos():
             err = T("photo_required")
@@ -248,6 +252,9 @@ def listing_edit(listing_id):
         return redirect(url_for("landlord.dashboard"))
     if request.method == "POST":
         data = _read_listing_form()
+        # Geo-gate: listings only in open districts (hard gate).
+        if data["city"] and not is_district_open(data["city"]):
+            return construction_response(data["city"])
         err = _validate_listing_form(data)
         if not err and not listing.photos and not _has_uploaded_photos():
             err = T("photo_required")

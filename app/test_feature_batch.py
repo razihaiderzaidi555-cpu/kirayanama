@@ -42,29 +42,31 @@ with app.app_context():
     # --- register with email + cascading location ---
     r = client.post("/register", data={"name": "Naya", "phone": "03000000004",
         "email": "naya@test.com", "password": "pass1234", "role": "renter",
-        "division": "faisalabad", "district": "chiniot", "tehsil": "lalian"})
+        "division": "faisalabad", "district": "faisalabad", "tehsil": "faisalabad-city"})
     check("register with email -> redirect", r.status_code in (301, 302))
     naya = User.query.filter_by(phone="03000000004").first()
     check("email saved", naya.email == "naya@test.com")
     check("register division saved", naya.division == "faisalabad")
-    check("register district saved", naya.district == "chiniot")
-    check("register tehsil saved", naya.city == "lalian")
+    check("register district saved", naya.district == "faisalabad")
+    check("register tehsil saved", naya.city == "faisalabad-city")
     client.get("/logout")
 
-    # legacy flat city still resolves (backward compat)
+    # legacy flat city still resolves (backward compat) — unit level, since
+    # locked-district signups now get the construction page (geo-gating).
+    from punjab_divisions import resolve_location as _rl
+    check("legacy city resolves (unit)", _rl(city="bhuwana") == ("faisalabad", "chiniot", "bhuwana"))
     r = client.post("/register", data={"name": "Purana", "phone": "03000000006",
         "email": "purana@test.com", "password": "pass1234", "role": "renter",
         "city": "bhuwana"})
-    check("legacy city register -> redirect", r.status_code in (301, 302))
-    pur = User.query.filter_by(phone="03000000006").first()
-    check("legacy city resolves division", pur.division == "faisalabad")
-    check("legacy city resolves district", pur.district == "chiniot")
-    check("legacy city resolves tehsil", pur.city == "bhuwana")
+    check("locked-district legacy signup -> construction",
+          r.status_code == 200 and "جلد آ رہا ہے" in r.data.decode())
+    check("locked-district signup creates no user",
+          User.query.filter_by(phone="03000000006").first() is None)
     client.get("/logout")
 
     # duplicate email rejected
     r = client.post("/register", data={"name": "Dup", "phone": "03000000005",
-        "email": "naya@test.com", "password": "pass1234", "role": "renter", "city": "chiniot"})
+        "email": "naya@test.com", "password": "pass1234", "role": "renter", "city": "faisalabad"})
     check("duplicate email rejected", b"email_taken" in r.data or "email" in r.data.decode().lower())
     client.get("/logout")
 
@@ -79,7 +81,7 @@ with app.app_context():
     client.post("/login", data={"phone": "03000000002", "password": "ll123456"})
     # no photo -> rejected
     r = client.post("/dashboard/listings/new", data={
-        "title_ur": "ٹیسٹ مکان", "city": "chiniot", "monthly_rent": "15000",
+        "title_ur": "ٹیسٹ مکان", "city": "faisalabad", "monthly_rent": "15000",
         "property_type": "house"}, follow_redirects=True)
     check("listing without photo rejected", "photo_required" in r.data.decode() or "تصویر" in r.data.decode())
     check("no listing created", Listing.query.count() == 0)
@@ -91,29 +93,29 @@ with app.app_context():
     buf = io.BytesIO(); img.save(buf, "PNG"); buf.seek(0)
     r = client.post("/dashboard/listings/new", data={
         "title_ur": "ٹیسٹ مکان", "monthly_rent": "15000",
-        "division": "faisalabad", "district": "chiniot", "tehsil": "chiniot",
+        "division": "faisalabad", "district": "faisalabad", "tehsil": "faisalabad-city",
         "property_type": "house",
         "photos": (buf, "test.png")}, content_type="multipart/form-data",
         follow_redirects=True)
     check("listing with photo created", Listing.query.count() == 1)
     listing = Listing.query.first()
     check("listing division saved", listing.division == "faisalabad")
-    check("listing district saved", listing.city == "chiniot")
-    check("listing tehsil saved", listing.tehsil == "chiniot")
+    check("listing district saved", listing.city == "faisalabad")
+    check("listing tehsil saved", listing.tehsil == "faisalabad-city")
     listing.status = "approved"; listing.photo_status = "approved"; db.session.commit()
 
     # legacy city-only listing post still works
     buf2 = io.BytesIO(); img.save(buf2, "PNG"); buf2.seek(0)
     r = client.post("/dashboard/listings/new", data={
-        "title_ur": "پرانا مکان", "city": "lalian", "monthly_rent": "12000",
+        "title_ur": "پرانا مکان", "city": "jaranwala", "monthly_rent": "12000",
         "property_type": "house",
         "photos": (buf2, "test2.png")}, content_type="multipart/form-data",
         follow_redirects=True)
     check("legacy city listing created", Listing.query.count() == 2)
     legacy = Listing.query.filter_by(title_ur="پرانا مکان").first()
     check("legacy listing division", legacy.division == "faisalabad")
-    check("legacy listing district", legacy.city == "chiniot")
-    check("legacy listing tehsil", legacy.tehsil == "lalian")
+    check("legacy listing district", legacy.city == "faisalabad")
+    check("legacy listing tehsil", legacy.tehsil == "jaranwala")
     legacy.status = "approved"; legacy.photo_status = "approved"; db.session.commit()
 
     # --- renter contacts -> my-requests shows it ---
@@ -149,15 +151,15 @@ with app.app_context():
     r = client.get("/divisions")
     check("divisions index 200", r.status_code == 200)
     check("divisions index lists lahore", "لاہور" in r.data.decode())
-    r = client.get("/city/chiniot")
+    r = client.get("/city/faisalabad")
     check("district page 200", r.status_code == 200)
-    r = client.get("/city/lalian")
-    check("legacy tehsil slug page 200", r.status_code == 200)
-    check("legacy tehsil page filtered", "پرانا مکان" in r.data.decode()
+    r = client.get("/city/jaranwala")
+    check("tehsil slug page 200", r.status_code == 200)
+    check("tehsil page filtered", "پرانا مکان" in r.data.decode()
           and "ٹیسٹ مکان" not in r.data.decode())
     r = client.get("/city/nowhere")
     check("bad city 404", r.status_code == 404)
-    r = client.get("/listings?division=faisalabad&district=chiniot&tehsil=chiniot")
+    r = client.get("/listings?division=faisalabad&district=faisalabad&tehsil=faisalabad-city")
     body = r.data.decode()
     check("tehsil filter shows match", "ٹیسٹ مکان" in body)
     check("tehsil filter hides other", "پرانا مکان" not in body)
@@ -169,6 +171,8 @@ with app.app_context():
     check("sitemap has division urls", "/division/lahore" in r.data.decode())
 
     # invalid triple on listing form -> graceful fallback, no crash
+    # (geo-gating: the garbage triple falls back to locked chiniot, so the
+    # submission is rejected with the construction page, never silently listed)
     buf3 = io.BytesIO(); img.save(buf3, "PNG"); buf3.seek(0)
     r = client.post("/dashboard/listings/new", data={
         "title_ur": "غلط مقام", "monthly_rent": "9000",
@@ -177,7 +181,8 @@ with app.app_context():
         "photos": (buf3, "test3.png")}, content_type="multipart/form-data",
         follow_redirects=True)
     bad = Listing.query.filter_by(title_ur="غلط مقام").first()
-    check("invalid triple falls back", bad is not None and bad.division == "faisalabad")
+    check("invalid triple -> construction, no listing",
+          bad is None and "جلد آ رہا ہے" in r.data.decode())
 
     # --- OTP forgot password flow (mock email as sent) ---
     import mailer
@@ -233,7 +238,7 @@ with app.app_context():
     buf3 = io.BytesIO(); img3.save(buf3, "PNG"); buf3.seek(0)
     r = client.post("/dashboard/listings/new", data={
         "title_ur": "فوٹو ٹیسٹ", "monthly_rent": "15000",
-        "division": "faisalabad", "district": "chiniot", "tehsil": "chiniot",
+        "division": "faisalabad", "district": "faisalabad", "tehsil": "faisalabad-city",
         "property_type": "house", "photos": (buf3, "p3.png")},
         content_type="multipart/form-data", follow_redirects=True)
     pl = Listing.query.filter_by(title_ur="فوٹو ٹیسٹ").first()
@@ -270,7 +275,7 @@ with app.app_context():
     with mock.patch("person_guard.scan_photo_paths", return_value=True):
         client.post("/dashboard/listings/new", data={
             "title_ur": "شخص ٹیسٹ", "monthly_rent": "15000",
-            "division": "faisalabad", "district": "chiniot", "tehsil": "chiniot",
+            "division": "faisalabad", "district": "faisalabad", "tehsil": "faisalabad-city",
             "property_type": "house", "photos": (buf5, "p5.png")},
             content_type="multipart/form-data", follow_redirects=True)
     pp = Listing.query.filter_by(title_ur="شخص ٹیسٹ").first()
@@ -302,7 +307,7 @@ with app.app_context():
     client.post("/login", data={"phone": "03000000002", "password": "ll123456"})
     client.post("/dashboard/listings/new", data={
         "title_ur": "مسترد ٹیسٹ", "monthly_rent": "15000",
-        "division": "faisalabad", "district": "chiniot", "tehsil": "chiniot",
+        "division": "faisalabad", "district": "faisalabad", "tehsil": "faisalabad-city",
         "property_type": "house", "photos": (buf4, "p4.png")},
         content_type="multipart/form-data", follow_redirects=True)
     rl = Listing.query.filter_by(title_ur="مسترد ٹیسٹ").first()

@@ -61,19 +61,19 @@ with app.app_context():
             db.session.add(Setting(key=k, value=v))
     db.session.commit()
 
-    # --- fill quota: 50 hostels in 'multan', 51st owes the fee ---
+    # --- fill quota: 50 hostels in 'sargodha', 51st owes the fee ---
     for i in range(1, 51):
         client.post("/hostel/register", data={
             "name": "Q%d" % i, "phone": "03110000%03d" % i,
             "password": "pass1234", "cnic": "35202-1111111-1",
-            "hostel_name_ur": "Quota H %d" % i, "district": "multan",
+            "hostel_name_ur": "Quota H %d" % i, "district": "sargodha",
             "address": "Addr", "photos": png_file()},
             content_type="multipart/form-data")
         client.get("/logout")
     client.post("/hostel/register", data={
         "name": "Fee Owner", "phone": "03119999999", "password": "pass1234",
         "cnic": "35202-1111111-1", "hostel_name_ur": "Fee Hostel",
-        "district": "multan", "address": "Addr", "photos": png_file()},
+        "district": "sargodha", "address": "Addr", "photos": png_file()},
         content_type="multipart/form-data")
     client.get("/logout")
     h = Hostel.query.filter_by(hostel_name_ur="Fee Hostel").first()
@@ -139,7 +139,7 @@ with app.app_context():
     client.post("/hostel/register", data={
         "name": "Fee Owner R", "phone": "03116666666", "password": "pass1234",
         "cnic": "35202-1111111-1", "hostel_name_ur": "Fee Hostel R",
-        "district": "multan", "address": "Addr", "photos": png_file()},
+        "district": "sargodha", "address": "Addr", "photos": png_file()},
         content_type="multipart/form-data")
     client.get("/logout")
     hr = Hostel.query.filter_by(hostel_name_ur="Fee Hostel R").first()
@@ -156,7 +156,7 @@ with app.app_context():
     client.post("/hostel/register", data={
         "name": "Fee Owner 2", "phone": "03118888888", "password": "pass1234",
         "cnic": "35202-1111111-1", "hostel_name_ur": "Fee Hostel 2",
-        "district": "multan", "address": "Addr", "photos": png_file()},
+        "district": "sargodha", "address": "Addr", "photos": png_file()},
         content_type="multipart/form-data")
     client.get("/logout")
     h4 = Hostel.query.filter_by(hostel_name_ur="Fee Hostel 2").first()
@@ -176,7 +176,7 @@ with app.app_context():
     client.post("/hostel/register", data={
         "name": "Fee Owner 3", "phone": "03117777777", "password": "pass1234",
         "cnic": "35202-1111111-1", "hostel_name_ur": "Fee Hostel 3",
-        "district": "multan", "address": "Addr", "photos": png_file()},
+        "district": "sargodha", "address": "Addr", "photos": png_file()},
         content_type="multipart/form-data")
     client.get("/logout")
     h5 = Hostel.query.filter_by(hostel_name_ur="Fee Hostel 3").first()

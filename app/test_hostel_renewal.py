@@ -78,7 +78,7 @@ with app.app_context():
         return r
 
     # --- approval sets expiry = today + 365d ---
-    h1 = register_owner("03110001001", "chiniot", "Renewal H1")
+    h1 = register_owner("03110001001", "faisalabad", "Renewal H1")
     admin_approve(h1)
     h1 = Hostel.query.get(h1.id)
     check("approval: status approved", h1.status == "approved")
@@ -100,7 +100,7 @@ with app.app_context():
     check("expiry state expired", hostel_expiry_state(h1) == "expired")
     r = client.get("/hostels")
     check("expired hidden from browse", "Renewal H1" not in r.data.decode())
-    r = client.get("/hostels/chiniot")
+    r = client.get("/hostels/faisalabad")
     check("expired hidden from district browse", "Renewal H1" not in r.data.decode())
     r = client.get("/hostel/view/%d" % h1.id)
     check("expired detail 404", r.status_code == 404)

@@ -3,9 +3,11 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_user, logout_user, current_user, login_required
 
 from models import (db, User, next_public_id, CITIES, award_tokens,
-                    award_referral_tokens, ensure_referral_code, TOKEN_SIGNUP_BONUS)
+                    award_referral_tokens, ensure_referral_code, TOKEN_SIGNUP_BONUS,
+                    is_district_open)
 from punjab_divisions import resolve_location, is_valid_location
 from translations import get_text
+from utils import construction_response
 
 bp = Blueprint("auth", __name__)
 
@@ -53,6 +55,9 @@ def register():
             user_city, user_division, user_district = rteh or rdist, rdiv, rdist
         else:
             user_city, user_division, user_district = "", "", ""
+        # Geo-gate: signups only in open districts (city-by-city launch).
+        if user_district and not is_district_open(user_district):
+            return construction_response(user_district)
         if not name:
             flash(T("name_req"))
         elif not phone:

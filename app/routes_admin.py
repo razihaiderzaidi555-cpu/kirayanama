@@ -9,7 +9,8 @@ from models import (db, User, Listing, ContactRequest, Setting, get_setting,
                     Draw, TokenLedger, token_balance, award_tokens, TOKEN_DEAL_ENTRY,
                     Hostel, hostel_free_slots, hostel_proof_files, UsedTrx,
                     hostel_proof_types, hostel_fee_amount, hostel_is_expired,
-                    hostel_renewal_expiry, VisitStat, visit_stats)
+                    hostel_renewal_expiry, VisitStat, visit_stats,
+                    normalize_open_districts, OPEN_DISTRICTS_DEFAULT)
 from routes_lucky import run_weighted_draw
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, g, send_file, current_app
 from flask_login import login_required, current_user
@@ -429,6 +430,17 @@ def settings():
                 db.session.add(s)
             else:
                 s.value = val
+        # Geo-gate: open districts (comma-separated slugs); bad input keeps
+        # the old list so the site can never end up with zero open cities.
+        raw_open = (request.form.get("open_districts") or "").strip()
+        norm_open = normalize_open_districts(raw_open)
+        if norm_open:
+            s = Setting.query.get("open_districts")
+            if s is None:
+                s = Setting(key="open_districts", value=norm_open)
+                db.session.add(s)
+            else:
+                s.value = norm_open
         db.session.commit()
         flash(_t("settings_saved"))
         return redirect(url_for("admin.settings"))
@@ -439,6 +451,7 @@ def settings():
         easypaisa_number=get_setting("easypaisa_number"),
         upaisa_number=get_setting("upaisa_number"),
         hbl_account=get_setting("hbl_account"),
+        open_districts=get_setting("open_districts", OPEN_DISTRICTS_DEFAULT),
         alert_token=get_setting("alert_token"),
     )
 

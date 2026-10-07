@@ -16,7 +16,11 @@
       <select id="district" name="district" onchange="this.form.submit()">
         <option value="">{{ t('all') }}</option>
         {% for d in districts %}
+        {% if is_district_open(d) %}
         <option value="{{ d }}" {% if active_district == d %}selected{% endif %}>{{ district_name(d) }}</option>
+        {% else %}
+        <option value="{{ d }}" disabled>🔒 {{ district_name(d) }} — {{ t('coming_soon_badge') }}</option>
+        {% endif %}
         {% endfor %}
       </select>
     </div>

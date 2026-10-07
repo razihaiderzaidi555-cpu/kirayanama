@@ -4,7 +4,6 @@ import re
 import uuid
 from werkzeug.utils import secure_filename
 from PIL import Image
-
 ALLOWED_EXT = {"png", "jpg", "jpeg", "webp"}
 MAX_DIM = 1280
 
@@ -59,3 +58,17 @@ def save_upload(file_storage, subdir, upload_root):
     except Exception:
         pass
     return name
+
+
+def construction_response(district=None):
+    """Render the friendly 'coming soon' page for a locked district.
+
+    Used by the geo-gate (city-by-city launch): locked districts never leak
+    listings — visitors get this page (HTTP 200, not an error page) with
+    links to the open cities. Deferred imports keep module load order safe.
+    """
+    from flask import render_template
+    from models import open_district_slugs
+    return render_template("public/construction.html",
+                           open_districts=open_district_slugs(),
+                           locked_district=district)

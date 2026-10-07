@@ -24,10 +24,12 @@ from models import (db, User, Hostel, HostelPhoto, UsedTrx, next_public_id,
                     hostel_proof_types, HOSTEL_PROOF_TYPES, hostel_fee_amount,
                     hostel_is_expired, hostel_renewal_expiry,
                     hostel_show_welcome_notice,
-                    ensure_referral_code, get_setting)
+                    ensure_referral_code, get_setting,
+                    open_district_slugs, is_district_open)
 from punjab_divisions import district_slugs, DIVISIONS
 from translations import get_text
 from utils import save_upload, find_phone_numbers, normalize_digits
+from utils import construction_response
 from payment_guard import verify_payment_screenshot
 from utils import save_upload, find_phone_numbers
 
@@ -103,6 +105,9 @@ def register():
         hostel_name_en = (request.form.get("hostel_name_en") or "").strip()
         district = (request.form.get("district") or "").strip()
         address = (request.form.get("address") or "").strip()
+        # Geo-gate: registrations only in open districts (hard gate).
+        if district and not is_district_open(district):
+            return construction_response(district)
         fee_due = hostel_fee_due_for(district) if district else False
         err = None
         if not name:
@@ -371,6 +376,10 @@ def _visible_hostels_q():
 @bp.route("/hostels")
 def browse():
     district = (request.args.get("district") or "").strip()
+    # Geo-gate: locked district filter -> construction page (no listings leak).
+    if district and district in district_slugs() \
+            and not is_district_open(district):
+        return construction_response(district)
     q = _visible_hostels_q()
     if district:
         q = q.filter_by(district=district)
@@ -385,6 +394,9 @@ def browse_district(district):
     if district not in district_slugs():
         from flask import abort
         abort(404)
+    # Geo-gate: locked districts render the friendly construction page.
+    if not is_district_open(district):
+        return construction_response(district)
     hostels = (_visible_hostels_q().filter_by(district=district)
                .order_by(Hostel.created_at.desc()).all())
     return render_template("hostel/browse.html", hostels=hostels,
@@ -398,4 +410,7 @@ def detail(hid):
     if hostel.status != "approved" or hostel_is_expired(hostel):
         from flask import abort
         abort(404)
+    # Geo-gate: hostels in locked districts are not publicly viewable.
+    if not is_district_open(hostel.district):
+        return construction_response(hostel.district)
     return render_template("hostel/detail.html", hostel=hostel)

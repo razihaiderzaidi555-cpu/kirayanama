@@ -57,7 +57,7 @@ with app.app_context():
             follow_redirects=False)
 
     # --- basic registration ---
-    r = register_hostel("03000000101", "chiniot")
+    r = register_hostel("03000000101", "faisalabad")
     check("register -> redirect", r.status_code in (301, 302))
     u = User.query.filter_by(phone="03000000101").first()
     check("user role hostel_owner", u is not None and u.role == "hostel_owner")
@@ -68,24 +68,24 @@ with app.app_context():
     check("first 50: fee_due False", h is not None and not h.fee_due)
     client.get("/logout")
 
-    # --- quota: fill chiniot to 50, 51st owes fee ---
+    # --- quota: fill faisalabad to 50, 51st owes fee ---
     for i in range(2, 51):
         client.post("/hostel/register", data={
             "name": "Q%d" % i, "phone": "03000000%03d" % (100 + i),
             "password": "pass1234", "cnic": "35202-1111111-1",
             "hostel_name_ur": "Quota Hostel %d" % i,
-            "district": "chiniot", "address": "Addr",
+            "district": "faisalabad", "address": "Addr",
             "photos": png_file()}, content_type="multipart/form-data")
         client.get("/logout")
     check("quota used == 50",
-          (Hostel.query.filter_by(district="chiniot")
+          (Hostel.query.filter_by(district="faisalabad")
            .filter(Hostel.status != "rejected").count()) == 50)
-    check("free slots == 0", hostel_free_slots("chiniot") == 0)
-    check("fee due for next", hostel_fee_due_for("chiniot"))
+    check("free slots == 0", hostel_free_slots("faisalabad") == 0)
+    check("fee due for next", hostel_fee_due_for("faisalabad"))
     check("other district still free", not hostel_fee_due_for("lahore"))
     check("free slots == 50 elsewhere", hostel_free_slots("lahore") == HOSTEL_FREE_QUOTA)
 
-    r = register_hostel("03000000200", "chiniot", "51st Hostel")
+    r = register_hostel("03000000200", "faisalabad", "51st Hostel")
     h51 = Hostel.query.filter_by(hostel_name_ur="51st Hostel").first()
     check("51st registration: fee_due True",
           h51 is not None and h51.fee_due)
@@ -96,7 +96,7 @@ with app.app_context():
     first.status = "rejected"
     second.status = "rejected"
     db.session.commit()
-    check("rejected frees a slot", hostel_free_slots("chiniot") == 1)
+    check("rejected frees a slot", hostel_free_slots("faisalabad") == 1)
     first.status = "pending"
     second.status = "pending"
     db.session.commit()
@@ -169,7 +169,7 @@ with app.app_context():
     hp = Hostel.query.filter_by(hostel_name_ur="Test Hostel").first()
     r = client.get("/hostel/view/%d" % hp.id)
     check("pending detail 404", r.status_code == 404)
-    r = client.get("/hostels/chiniot")
+    r = client.get("/hostels/faisalabad")
     check("browse by district", r.status_code == 200)
 
     # --- suspend hides from public ---
