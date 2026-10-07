@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ t('proof_docs') }}{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="card">
+    <h1>{{ t('proof_docs') }}</h1>
+    <p class="muted">{{ t('proof_docs_hint') }}</p>
+    <form method="post" action="{{ url_for('hostel.docs', hid=hostel.id) }}" enctype="multipart/form-data">
+      <div class="form-group">
+        <label for="cnic_copy">{{ t('cnic_copy') }}</label>
+        <input id="cnic_copy" name="cnic_copy" type="file" accept="image/*" required>
+      </div>
+      <div class="form-group">
+        <label>{{ t('proof_docs') }}</label>
+        {% for pt in proof_types_all %}
+        <div>
+          <label>
+            <input type="checkbox" name="proof_types" value="{{ pt }}"
+                   {% if pt in proof_types_sel %}checked{% endif %}>
+            {{ t('proof_' + pt) }}
+          </label>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="form-group">
+        <label for="proof_files">{{ t('upload_btn') }}</label>
+        <input id="proof_files" name="proof_files" type="file" accept="image/*" multiple required>
+      </div>
+      <button class="btn btn-primary" type="submit">{{ t('upload_btn') }}</button>
+    </form>
+    {% if proof_files %}
+    <p class="muted">{{ t('photos_saved') }} ({{ proof_files|length }})</p>
+    {% endif %}
+    <p><a href="{{ url_for('hostel.dashboard') }}">&larr; {{ t('back') }}</a></p>
+  </div>
+</div>
+{% endblock %}
