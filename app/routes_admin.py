@@ -1,15 +1,15 @@
 """W4 admin blueprint. Routes: /admin (dashboard), /admin/users,
 /admin/listings, /admin/payments, /admin/settings, /admin/monitoring + POST actions."""
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, date
 import os
 
 from models import (db, User, Listing, ContactRequest, Setting, get_setting,
                     SUSPICIOUS_MIN_VIEWS, SUSPICIOUS_MIN_CANCELLATIONS,
                     Draw, TokenLedger, token_balance, award_tokens, TOKEN_DEAL_ENTRY,
                     Hostel, hostel_free_slots, hostel_proof_files, UsedTrx,
-                    hostel_proof_types, HOSTEL_SECURITY_FEE, VisitStat,
-                    visit_stats)
+                    hostel_proof_types, hostel_fee_amount, hostel_is_expired,
+                    hostel_renewal_expiry, VisitStat, visit_stats)
 from routes_lucky import run_weighted_draw
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, g, send_file, current_app
 from flask_login import login_required, current_user
@@ -208,7 +208,7 @@ def hostels():
                            district_rows=district_rows,
                            proof_files_of=hostel_proof_files,
                            proof_types_of=hostel_proof_types,
-                           fee_amount=HOSTEL_SECURITY_FEE)
+                           fee_amount=hostel_fee_amount())
 
 
 @bp.route("/photos")
@@ -250,6 +250,8 @@ def approve_hostel(hid):
     hostel = Hostel.query.get_or_404(hid)
     hostel.status = "approved"
     hostel.rejection_reason = ""
+    # Yearly registration: valid for one year from approval.
+    hostel.reg_expires_at = hostel_renewal_expiry()
     db.session.commit()
     flash(_t("approved_msg"))
     return redirect(url_for("admin.hostels"))
@@ -289,15 +291,21 @@ def unsuspend_hostel(hid):
 @bp.route("/hostels/<int:hid>/verify-fee", methods=["POST"])
 @admin_required
 def verify_hostel_fee(hid):
-    """Admin looked at the Rs 2000 fee screenshot -> mark fee paid."""
+    """Admin looked at the fee screenshot -> mark fee paid. Also covers a
+    manual renewal verification: an expired registration is extended a year."""
     hostel = Hostel.query.get_or_404(hid)
-    if hostel.fee_due and hostel.fee_screenshot and not hostel.fee_paid:
+    renewable = hostel_is_expired(hostel)
+    if hostel.fee_screenshot and not hostel.fee_paid and (hostel.fee_due or renewable):
         hostel.fee_paid = True
         hostel.fee_paid_at = datetime.utcnow()
         # Claim the typed TID so it can't be replayed on another fee/deal.
         if hostel.fee_tid and UsedTrx.query.get(hostel.fee_tid) is None:
             db.session.add(UsedTrx(trx_id=hostel.fee_tid, hostel_id=hostel.id,
                                    side="hostel_fee"))
+        if renewable:
+            base = hostel.reg_expires_at
+            hostel.reg_expires_at = hostel_renewal_expiry(
+                max(base, date.today()) if base else None)
         db.session.commit()
         flash(_t("fee_verified_msg"))
     return redirect(url_for("admin.hostels"))
@@ -403,8 +411,18 @@ def luckydraw_run():
 @admin_required
 def settings():
     if request.method == "POST":
-        for key in ("jazzcash_number", "easypaisa_number", "upaisa_number", "hbl_account"):
+        for key in ("jazzcash_number", "easypaisa_number", "upaisa_number",
+                    "hbl_account", "hostel_fee_amount"):
             val = (request.form.get(key) or "").strip()
+            if key == "hostel_fee_amount":
+                # Must be a positive whole number; bad input keeps the old rate.
+                try:
+                    iv = int(val)
+                    if iv <= 0:
+                        raise ValueError
+                    val = str(iv)
+                except (TypeError, ValueError):
+                    continue
             s = Setting.query.get(key)
             if s is None:
                 s = Setting(key=key, value=val)
@@ -416,6 +434,7 @@ def settings():
         return redirect(url_for("admin.settings"))
     return render_template(
         "admin/settings.html",
+        hostel_fee_amount=get_setting("hostel_fee_amount", "2000"),
         jazzcash_number=get_setting("jazzcash_number"),
         easypaisa_number=get_setting("easypaisa_number"),
         upaisa_number=get_setting("upaisa_number"),
