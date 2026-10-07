@@ -3,6 +3,13 @@
 {% block content %}
 <div class="container">
   <h1>{{ t('browse_hostels') }}</h1>
+  <div class="card" style="margin-bottom:18px">
+    <div class="pad">
+      <h3>{{ t('hostel_owner_cta') }}</h3>
+      <p><a class="btn btn-primary" href="{{ url_for('hostel.register') }}">{{ t('hostel_owner_cta_btn') }}</a></p>
+      <p class="muted">{{ t('hostel_already_registered') }}</p>
+    </div>
+  </div>
   <form method="get" action="{{ url_for('hostel.browse') }}">
     <div class="form-group">
       <label for="district">{{ t('select_district') }}</label>
