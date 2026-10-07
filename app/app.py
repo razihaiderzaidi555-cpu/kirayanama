@@ -6,7 +6,8 @@ from flask import Flask, g, request, session, redirect, url_for, Response
 from flask_login import LoginManager
 
 from models import db, User, CITIES
-from models import record_visit, visit_counts
+from models import (record_visit, visit_counts, hostel_is_expired,
+                    hostel_expiry_state, hostel_show_renewal_reminder)
 from translations import get_text
 from punjab_divisions import (
     DIVISIONS, division_slugs, division_image, district_image, place_name, resolve_location,
@@ -90,6 +91,9 @@ def create_app():
             "division_slugs": division_slugs(),
             "division_image": division_image,
             "district_image": district_image,
+            "hostel_is_expired": hostel_is_expired,
+            "hostel_expiry_state": hostel_expiry_state,
+            "hostel_show_renewal_reminder": hostel_show_renewal_reminder,
         }
 
     # blueprints (each worker owns one module; missing ones are skipped)
@@ -179,6 +183,12 @@ def _migrate_schema():
                      ("fee_verified", "BOOLEAN"), ("fee_review_reason", "VARCHAR(40)")):
         if col not in hcols:
             stmts.append(f"ALTER TABLE hostels ADD COLUMN {col} {typ}")
+    # yearly registration renewal (2026-10-07): expiry date per hostel
+    if "reg_expires_at" not in hcols:
+        stmts.append("ALTER TABLE hostels ADD COLUMN reg_expires_at DATE")
+    # phase-2 daily reminder dismissal tracking (2026-10-07)
+    if "renewal_dismissed_at" not in hcols:
+        stmts.append("ALTER TABLE hostels ADD COLUMN renewal_dismissed_at DATETIME")
     # used_trx: hostel-fee support (2026-10-07). Old tables have
     # contact_request_id NOT NULL and no hostel_id — rebuild once.
     tcols = {c["name"]: c for c in inspect(db.engine).get_columns("used_trx")} \
@@ -195,6 +205,23 @@ def _migrate_schema():
     with db.engine.begin() as conn:
         conn.execute(text("UPDATE listings SET photo_status='approved' "
                           "WHERE photo_status IS NULL"))
+    _backfill_hostel_expiry()
+
+
+def _backfill_hostel_expiry():
+    """Existing hostels without an expiry date get one: (created_at or today)
+    + 365 days. Idempotent — only touches NULL rows; admin approval always
+    overwrites with approval date + 365d."""
+    from datetime import date, timedelta
+    from models import Hostel
+    today = date.today()
+    changed = False
+    for h in Hostel.query.filter(Hostel.reg_expires_at.is_(None)).all():
+        base = h.created_at.date() if h.created_at else today
+        h.reg_expires_at = base + timedelta(days=365)
+        changed = True
+    if changed:
+        db.session.commit()
 
 
 def _rebuild_used_trx(conn):
