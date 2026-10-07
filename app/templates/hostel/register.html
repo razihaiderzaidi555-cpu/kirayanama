@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% from "macros_location.html" import location_selects with context %}
+{% block title %}{{ t('hostel_register_title') }}{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="card">
+    <h1>{{ t('hostel_register_title') }}</h1>
+    <p class="muted">{{ t('hostel_register_sub') }}</p>
+    <form method="post" action="{{ url_for('hostel.register') }}" enctype="multipart/form-data">
+      <div class="form-group">
+        <label for="name">{{ t('name') }}</label>
+        <input id="name" name="name" type="text" required
+               value="{{ request.form.get('name', '') }}">
+      </div>
+      <div class="form-group">
+        <label for="phone">{{ t('phone') }}</label>
+        <input id="phone" name="phone" type="tel" required
+               value="{{ request.form.get('phone', '') }}">
+      </div>
+      <div class="form-group">
+        <label for="password">{{ t('password') }}</label>
+        <input id="password" name="password" type="password" required minlength="6">
+      </div>
+      <div class="form-group">
+        <label for="cnic">{{ t('owner_cnic') }}</label>
+        <input id="cnic" name="cnic" type="text" required
+               value="{{ request.form.get('cnic', '') }}" placeholder="35202-1234567-8">
+      </div>
+      <div class="form-group">
+        <label for="hostel_name_ur">{{ t('hostel_name') }}</label>
+        <input id="hostel_name_ur" name="hostel_name_ur" type="text" required
+               value="{{ request.form.get('hostel_name_ur', '') }}">
+      </div>
+      <div class="form-group">
+        <label for="hostel_name_en">{{ t('hostel_name_en') }}</label>
+        <input id="hostel_name_en" name="hostel_name_en" type="text"
+               value="{{ request.form.get('hostel_name_en', '') }}">
+      </div>
+      {{ location_selects(request.form.get('division', ''), request.form.get('district', ''), '') }}
+      <div class="form-group">
+        <label for="address">{{ t('hostel_address') }}</label>
+        <textarea id="address" name="address" required>{{ request.form.get('address', '') }}</textarea>
+      </div>
+      <div class="form-group">
+        <label for="photos">{{ t('hostel_photos') }}</label>
+        <input id="photos" name="photos" type="file" accept="image/*" multiple required>
+        <p class="muted"><small>{{ t('hostel_photos_hint') }}</small></p>
+      </div>
+      <button class="btn btn-primary" type="submit">{{ t('hostel_register') }}</button>
+    </form>
+    <p><a href="{{ url_for('auth.login') }}">{{ t('have_account') }}</a></p>
+  </div>
+</div>
+{% endblock %}
