@@ -15,9 +15,9 @@
       <a class="btn btn-secondary btn-small" href="{{ url_for('admin.listings') }}">{{ t('view') }}</a>
     </div>
     <div class="card">
-      <h3>📷 {{ stats.pending_photos }}</h3>
-      <p>{{ t('photo_review_title') }}</p>
-      <a class="btn btn-secondary btn-small" href="{{ url_for('admin.photo_review') }}">{{ t('view') }}</a>
+      <h3>{{ stats.pending_hostels }}</h3>
+      <p>{{ t('admin_hostels') }}</p>
+      <a class="btn btn-secondary btn-small" href="{{ url_for('admin.hostels') }}">{{ t('view') }}</a>
     </div>
     <div class="card">
       <h3>{{ stats.in_review }}</h3>
@@ -53,13 +53,6 @@
       <h3>💾</h3>
       <p>{{ t('admin_backup') }}</p>
       <a class="btn btn-secondary btn-small" href="{{ url_for('admin.backup') }}">{{ t('download_backup') }}</a>
-    </div>
-    <div class="card">
-      <h3>👁️ {{ stats.visitors_total }}</h3>
-      <p>{{ t('admin_visitors') }} — {{ t('visitors_today') }}: {{ stats.visitors_today }} | {{ t('visitors_week') }}: {{ stats.visitors_week }}</p>
-      <form method="post" action="{{ url_for('admin.visitors_reset') }}" onsubmit="return confirm('{{ t('confirm_reset_visitors') }}');">
-        <button type="submit" class="btn btn-small btn-danger">{{ t('reset_visitors') }}</button>
-      </form>
     </div>
   </div>
 </div>
