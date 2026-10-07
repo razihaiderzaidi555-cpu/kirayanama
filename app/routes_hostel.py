@@ -130,6 +130,9 @@ def register():
             db.session.add(user)
             db.session.flush()
             ensure_referral_code(user)
+            # marketing-agent attribution (cousin plan): ?ref=CODE link
+            from models import claim_agent_ref
+            claim_agent_ref(user)
             hostel = Hostel(
                 owner_id=user.id,
                 hostel_name_ur=hostel_name_ur,
