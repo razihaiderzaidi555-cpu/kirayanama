@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ t('browse_hostels') }}{% endblock %}
+{% block content %}
+<div class="container">
+  <h1>{{ t('browse_hostels') }}</h1>
+  <form method="get" action="{{ url_for('hostel.browse') }}">
+    <div class="form-group">
+      <label for="district">{{ t('select_district') }}</label>
+      <select id="district" name="district" onchange="this.form.submit()">
+        <option value="">{{ t('all') }}</option>
+        {% for d in districts %}
+        <option value="{{ d }}" {% if active_district == d %}selected{% endif %}>{{ district_name(d) }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </form>
+  {% if hostels %}
+  <div class="grid grid-3">
+    {% for h in hostels %}
+    <div class="card">
+      {% set pp = h.primary_photo %}
+      {% if pp %}
+      <img class="listing-img" src="{{ url_for('static', filename='uploads/hostels/' + pp.filename) }}" alt="">
+      {% endif %}
+      <h3>{{ h.hostel_name_ur if lang == 'ur' else h.hostel_name_en or h.hostel_name_ur }}</h3>
+      <p class="muted">{{ district_name(h.district) }}</p>
+      <p><a class="btn btn-small btn-primary" href="{{ url_for('hostel.detail', hid=h.id) }}">{{ t('hostel_detail') }}</a></p>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">{{ t('no_hostels_yet') }}</p>
+  {% endif %}
+</div>
+{% endblock %}
