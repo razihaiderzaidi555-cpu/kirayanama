@@ -71,6 +71,9 @@ def register():
             db.session.add(user)
             db.session.flush()  # get user.id before referral handling
             ensure_referral_code(user)
+            # marketing-agent attribution (cousin plan): ?ref=CODE link
+            from models import claim_agent_ref
+            claim_agent_ref(user)
             # lucky-draw: free signup bonus for the new user
             award_tokens(user.id, TOKEN_SIGNUP_BONUS, "signup_bonus")
             # lucky-draw: credit the referrer (if any), capped monthly
