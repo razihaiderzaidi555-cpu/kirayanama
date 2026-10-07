@@ -46,45 +46,6 @@ def create_app():
             session["lang"] = lang
         g.lang = lang
 
-    @app.after_request
-    def _agent_ref_cookie(response):
-        """30-day fallback cookie for marketing-agent attribution.
-
-        ?ref=CODE on any page stores the code in the session (see
-        _capture_agent_ref); the cookie keeps attribution working when the
-        session is lost. Only set when a code is in the session.
-        """
-        try:
-            from models import AGENT_REF_SESSION_KEY, AGENT_REF_COOKIE, \
-                AGENT_REF_COOKIE_DAYS
-            code = session.get(AGENT_REF_SESSION_KEY)
-            if code and not request.cookies.get(AGENT_REF_COOKIE):
-                response.set_cookie(
-                    AGENT_REF_COOKIE, code,
-                    max_age=AGENT_REF_COOKIE_DAYS * 24 * 3600,
-                    httponly=True, samesite="Lax")
-        except Exception:
-            pass
-        return response
-
-    @app.before_request
-    def _capture_agent_ref():
-        """Capture ?ref=CODE (marketing-agent links) on any page.
-
-        Stored in the session when the code exists and is active; invalid
-        codes are ignored silently. Never breaks the request.
-        """
-        try:
-            raw = request.args.get("ref")
-            if not raw:
-                return
-            from models import (normalize_agent_code, get_active_agent_code,
-                                AGENT_REF_SESSION_KEY)
-            if get_active_agent_code(normalize_agent_code(raw)):
-                session[AGENT_REF_SESSION_KEY] = normalize_agent_code(raw)
-        except Exception:
-            app.logger.warning("agent ref capture failed", exc_info=True)
-
     @app.before_request
     def _count_visit():
         """Visitor counter: one increment per human GET page view.
@@ -228,11 +189,6 @@ def _migrate_schema():
     # phase-2 daily reminder dismissal tracking (2026-10-07)
     if "renewal_dismissed_at" not in hcols:
         stmts.append("ALTER TABLE hostels ADD COLUMN renewal_dismissed_at DATETIME")
-    # marketing-agent referral codes (2026-10-07, cousin plan):
-    # users.agent_ref holds the attributing code; referral_codes table is
-    # created by db.create_all().
-    if "agent_ref" not in ucols:
-        stmts.append("ALTER TABLE users ADD COLUMN agent_ref VARCHAR(40) DEFAULT ''")
     # used_trx: hostel-fee support (2026-10-07). Old tables have
     # contact_request_id NOT NULL and no hostel_id — rebuild once.
     tcols = {c["name"]: c for c in inspect(db.engine).get_columns("used_trx")} \

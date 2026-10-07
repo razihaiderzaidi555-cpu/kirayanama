@@ -9,8 +9,7 @@ from models import (db, User, Listing, ContactRequest, Setting, get_setting,
                     Draw, TokenLedger, token_balance, award_tokens, TOKEN_DEAL_ENTRY,
                     Hostel, hostel_free_slots, hostel_proof_files, UsedTrx,
                     hostel_proof_types, hostel_fee_amount, hostel_is_expired,
-                    hostel_renewal_expiry, VisitStat, visit_stats,
-                    ReferralCode, normalize_agent_code, agent_stats)
+                    hostel_renewal_expiry, VisitStat, visit_stats)
 from routes_lucky import run_weighted_draw
 from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, g, send_file, current_app
 from flask_login import login_required, current_user
@@ -453,85 +452,3 @@ def visitors_reset():
     db.session.commit()
     flash(_t("visitors_reset_done"))
     return redirect(url_for("admin.dashboard"))
-
-
-# ---------------- marketing agents (referral codes, cousin plan) ----------------
-
-@bp.route("/agents")
-@admin_required
-def agents():
-    """List referral codes with per-agent stats: signups, listings, verified,
-    amount due (verified x per-listing rate). This is Razi's payout sheet."""
-    codes = ReferralCode.query.order_by(ReferralCode.created_at.desc()).all()
-    rows = []
-    for rc in codes:
-        st = agent_stats(rc.code)
-        rows.append({"rc": rc, "stats": st})
-    return render_template("admin/agents.html", rows=rows)
-
-
-@bp.route("/agents/new", methods=["GET", "POST"])
-@admin_required
-def agents_new():
-    if request.method == "POST":
-        code = normalize_agent_code(request.form.get("code"))
-        name = (request.form.get("agent_name") or "").strip()
-        territory = (request.form.get("territory") or "").strip()
-        try:
-            rate = int(request.form.get("per_listing_rate") or 150)
-            if rate <= 0:
-                raise ValueError
-        except (TypeError, ValueError):
-            rate = 150
-        err = None
-        if not code:
-            err = _t("agent_code_invalid")
-        elif not name:
-            err = _t("agent_name_req")
-        elif ReferralCode.query.filter_by(code=code).first():
-            err = _t("agent_code_taken")
-        if err:
-            flash(err)
-        else:
-            rc = ReferralCode(code=code, agent_name=name, territory=territory,
-                              per_listing_rate=rate, is_active=True)
-            db.session.add(rc)
-            db.session.commit()
-            flash(_t("agent_created"))
-            return redirect(url_for("admin.agents"))
-    return render_template("admin/agent_form.html", rc=None)
-
-
-@bp.route("/agents/<int:aid>/edit", methods=["GET", "POST"])
-@admin_required
-def agents_edit(aid):
-    rc = ReferralCode.query.get_or_404(aid)
-    if request.method == "POST":
-        name = (request.form.get("agent_name") or "").strip()
-        territory = (request.form.get("territory") or "").strip()
-        try:
-            rate = int(request.form.get("per_listing_rate") or rc.per_listing_rate)
-            if rate <= 0:
-                raise ValueError
-        except (TypeError, ValueError):
-            rate = rc.per_listing_rate
-        if not name:
-            flash(_t("agent_name_req"))
-        else:
-            rc.agent_name = name
-            rc.territory = territory
-            rc.per_listing_rate = rate
-            db.session.commit()
-            flash(_t("agent_saved"))
-            return redirect(url_for("admin.agents"))
-    return render_template("admin/agent_form.html", rc=rc)
-
-
-@bp.route("/agents/<int:aid>/toggle", methods=["POST"])
-@admin_required
-def agents_toggle(aid):
-    rc = ReferralCode.query.get_or_404(aid)
-    rc.is_active = not rc.is_active
-    db.session.commit()
-    flash(_t("agent_deactivated") if not rc.is_active else _t("agent_activated"))
-    return redirect(url_for("admin.agents"))
