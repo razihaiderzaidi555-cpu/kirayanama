@@ -1,5 +1,5 @@
 """KirayaNama data models. Single source of truth — workers import from here, do not redefine."""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -53,6 +53,12 @@ class Hostel(db.Model):
     fee_company = db.Column(db.String(16), default="")
     fee_verified = db.Column(db.Boolean, default=False)  # auto-verified by payment_guard
     fee_review_reason = db.Column(db.String(40), default="")  # reason code if not auto-verified
+    # yearly registration renewal (2026-10-07): registration must be renewed
+    # every year; renewal fee = the rate current at that time.
+    reg_expires_at = db.Column(db.Date, nullable=True)  # set on admin approval (+365d)
+    # phase-2 daily reminder: last dismissal time (per hostel). The reminder
+    # reappears when a new calendar day starts after dismissal.
+    renewal_dismissed_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     owner = db.relationship("User", backref="hostels")
@@ -98,6 +104,72 @@ def hostel_free_slots(district):
 def hostel_fee_due_for(district):
     """True when the next registration in this district owes the security fee."""
     return hostel_free_slots(district) <= 0
+
+
+def hostel_fee_amount():
+    """Current hostel security-fee rate (PKR), admin-editable via settings.
+
+    Renewals always charge this current rate ("new rate kay mutabiq").
+    Falls back to HOSTEL_SECURITY_FEE on a missing/invalid setting value.
+    """
+    try:
+        return int(get_setting("hostel_fee_amount", "") or HOSTEL_SECURITY_FEE)
+    except (TypeError, ValueError):
+        return HOSTEL_SECURITY_FEE
+
+
+def hostel_is_expired(hostel):
+    """True when the hostel's yearly registration has lapsed.
+
+    Expired hostels are hidden from public browse until renewed.
+    Rows without an expiry date (pre-migration) are treated as valid.
+    """
+    if hostel is None or not hostel.reg_expires_at:
+        return False
+    return hostel.reg_expires_at < date.today()
+
+
+def hostel_renewal_expiry(from_date=None):
+    """Expiry date for a (re-)approved registration: +365 days."""
+    return (from_date or date.today()) + timedelta(days=365)
+
+
+def hostel_expiry_state(hostel, soon_days=30):
+    """'expired' / 'expiring_soon' / 'valid' / 'none' (no expiry date set).
+
+    Phase-2 daily reminder covers the last 30 days before expiry
+    (Razi's final spec, 2026-10-07): dismissible, back the next day.
+    """
+    if hostel is None or not hostel.reg_expires_at:
+        return "none"
+    today = date.today()
+    if hostel.reg_expires_at < today:
+        return "expired"
+    if hostel.reg_expires_at <= today + timedelta(days=soon_days):
+        return "expiring_soon"
+    return "valid"
+
+
+def hostel_show_welcome_notice(user):
+    """Phase-1 notice: a newly registered hostel owner sees it on their
+    dashboard for 7 days after registration, then it disappears on its own."""
+    created = getattr(user, "created_at", None)
+    if not created:
+        return False
+    return (datetime.utcnow() - created) < timedelta(days=7)
+
+
+def hostel_show_renewal_reminder(hostel):
+    """Phase-2 notice: True when the polite pre-expiry dashboard reminder
+    should be shown. Shows from 30 days before expiry; dismissible — after
+    a dismissal it stays hidden until a new calendar day starts, then
+    appears again daily."""
+    if hostel_expiry_state(hostel) != "expiring_soon":
+        return False
+    dismissed = hostel.renewal_dismissed_at
+    if not dismissed:
+        return True
+    return dismissed.date() < date.today()
 
 
 def hostel_proof_files(hostel):
