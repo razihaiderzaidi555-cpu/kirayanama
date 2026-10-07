@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ t('hostel_owner_dashboard') }}{% endblock %}
+{% macro hostel_card(h) %}
+<div class="card">
+  {% set pp = h.primary_photo %}
+  {% if pp %}
+  <img class="listing-img" src="{{ url_for('static', filename='uploads/hostels/' + pp.filename) }}" alt="">
+  {% endif %}
+  <h3>{{ h.hostel_name_ur if lang == 'ur' else h.hostel_name_en or h.hostel_name_ur }}</h3>
+  <p class="muted">{{ t('district') }}: {{ district_name(h.district) }}</p>
+  <p>
+    {% if h.status == 'pending' %}<span class="badge badge-yellow">{{ t('status_pending') }}</span>
+    {% elif h.status == 'approved' %}<span class="badge badge-green">{{ t('status_approved') }}</span>
+    {% elif h.status == 'suspended' %}<span class="badge badge-red">{{ t('suspend') }}</span>
+    {% else %}<span class="badge badge-red">{{ t('status_rejected') }}</span>{% endif %}
+  </p>
+  {% if h.status == 'pending' %}<p class="muted">{{ t('hostel_pending_msg') }}</p>{% endif %}
+  {% if h.status == 'rejected' and h.rejection_reason %}<p class="muted">{{ h.rejection_reason }}</p>{% endif %}
+  {% if h.fee_due %}
+  <p>{{ t('fee_status') }}:
+    {% if h.fee_paid %}<span class="badge badge-green">{{ t('fee_paid_label') }}</span>
+    {% elif h.fee_screenshot %}<span class="badge badge-yellow">{{ t('status_pending') }}</span>
+    {% else %}<span class="badge badge-red">{{ t('fee_unpaid') }} — Rs 2000</span>{% endif %}
+  </p>
+  {% else %}
+  <p class="muted">{{ t('fee_status') }}: {{ t('fee_not_due') }}</p>
+  {% endif %}
+  <p>
+    <a class="btn btn-small btn-secondary" href="{{ url_for('hostel.docs', hid=h.id) }}">{{ t('proof_docs') }}</a>
+    <a class="btn btn-small btn-secondary" href="{{ url_for('hostel.photos', hid=h.id) }}">{{ t('hostel_photos') }}</a>
+    {% if h.fee_due and not h.fee_paid %}
+    <a class="btn btn-small btn-primary" href="{{ url_for('hostel.fee', hid=h.id) }}">{{ t('hostel_fee_due_title') }}</a>
+    {% endif %}
+  </p>
+</div>
+{% endmacro %}
+{% block content %}
+<div class="container">
+  <h1>{{ t('hostel_owner_dashboard') }}</h1>
+  <p><a class="btn btn-primary" href="{{ url_for('hostel.register') }}">{{ t('register_new_hostel') }}</a></p>
+  <h2>{{ t('my_hostels') }} ({{ hostels|length }})</h2>
+  {% if hostels %}
+  <div class="grid grid-3">
+    {% for h in hostels %}{{ hostel_card(h) }}{% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">{{ t('no_hostels_yet') }}</p>
+  {% endif %}
+</div>
+{% endblock %}
