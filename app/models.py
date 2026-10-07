@@ -191,6 +191,101 @@ def hostel_proof_types(hostel):
         return []
 
 
+class ReferralCode(db.Model):
+    """Marketing-agent referral codes (Razi's cousin plan).
+
+    Admin creates one code per agent (e.g. 'ahmed-lhr'); the agent shares
+    links like kirayanama.com/?ref=ahmed-lhr. Signups through the link are
+    attributed via User.agent_ref. Amount due = verified listings x rate.
+    """
+    __tablename__ = "referral_codes"
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(40), unique=True, nullable=False)  # url-safe, lowercase
+    agent_name = db.Column(db.String(120), nullable=False)
+    territory = db.Column(db.String(80), default="")  # city/territory label
+    per_listing_rate = db.Column(db.Integer, default=150)  # Rs per VERIFIED listing
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return "<ReferralCode %s>" % self.code
+
+
+AGENT_REF_SESSION_KEY = "agent_ref_code"
+AGENT_REF_COOKIE = "kn_agent_ref"
+AGENT_REF_COOKIE_DAYS = 30
+
+
+def normalize_agent_code(code):
+    """Lowercase, URL-safe agent code or '' when invalid."""
+    import re
+    code = (code or "").strip().lower()
+    if re.fullmatch(r"[a-z0-9][a-z0-9\-]{1,38}", code or ""):
+        return code
+    return ""
+
+
+def get_active_agent_code(code):
+    """Return the active ReferralCode for a raw code string, else None."""
+    code = normalize_agent_code(code)
+    if not code:
+        return None
+    return ReferralCode.query.filter_by(code=code, is_active=True).first()
+
+
+def resolve_agent_ref():
+    """Agent code for the current visitor: session first, then 30-day cookie.
+
+    Validates the code is still active — deactivated codes stop attributing.
+    Never raises.
+    """
+    try:
+        from flask import session, request
+        raw = session.get(AGENT_REF_SESSION_KEY) or request.cookies.get(AGENT_REF_COOKIE)
+        return get_active_agent_code(raw)
+    except Exception:
+        return None
+
+
+def claim_agent_ref(user):
+    """Attribute a newly registered user to the visiting agent code.
+
+    Returns the code string or ''. Invalid/deactivated codes are ignored
+    silently. Consumes the session key (cookie stays as harmless fallback).
+    """
+    try:
+        from flask import session
+        agent = resolve_agent_ref()
+        session.pop(AGENT_REF_SESSION_KEY, None)
+        if agent:
+            user.agent_ref = agent.code
+            return agent.code
+        return ""
+    except Exception:
+        return ""
+
+
+def agent_stats(code):
+    """Per-agent numbers for the admin panel.
+
+    signups: users attributed to this code
+    listings: all listings by those users
+    verified: approved listings by those users (this is what Razi pays for)
+    amount_due: verified * per_listing_rate
+    """
+    code = normalize_agent_code(code)
+    rc = (ReferralCode.query.filter_by(code=code).first() if code else None)
+    rate = rc.per_listing_rate if rc else 0
+    signups = User.query.filter_by(agent_ref=code).count() if code else 0
+    listings = (Listing.query.join(User, Listing.landlord_id == User.id)
+                .filter(User.agent_ref == code).count() if code else 0)
+    verified = (Listing.query.join(User, Listing.landlord_id == User.id)
+                .filter(User.agent_ref == code, Listing.status == "approved")
+                .count() if code else 0)
+    return {"signups": signups, "listings": listings, "verified": verified,
+            "amount_due": verified * (rate or 0), "rate": rate or 0}
+
+
 class User(UserMixin, db.Model):
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True)
@@ -198,6 +293,8 @@ class User(UserMixin, db.Model):
     name = db.Column(db.String(120), nullable=False)
     phone = db.Column(db.String(20), unique=True, nullable=False)  # login id
     email = db.Column(db.String(120), nullable=True)  # for OTP recovery + notifications
+    # marketing-agent referral attribution (cousin plan): code string, e.g. 'ahmed-lhr'
+    agent_ref = db.Column(db.String(40), default="")
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default="renter")  # landlord/renter/dealer/admin/hostel_owner
     city = db.Column(db.String(40), default="")  # tehsil slug (legacy: old flat city slug)
