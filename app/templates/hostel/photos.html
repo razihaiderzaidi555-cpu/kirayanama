@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ t('hostel_photos') }}{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="card">
+    <h1>{{ hostel.hostel_name_ur if lang == 'ur' else hostel.hostel_name_en or hostel.hostel_name_ur }}</h1>
+    <h2>{{ t('hostel_photos') }}</h2>
+    {% if hostel.photos %}
+    <div class="grid grid-3">
+      {% for p in hostel.photos %}
+      <img class="listing-img" src="{{ url_for('static', filename='uploads/hostels/' + p.filename) }}" alt="">
+      {% endfor %}
+    </div>
+    {% endif %}
+    <form method="post" action="{{ url_for('hostel.photos', hid=hostel.id) }}" enctype="multipart/form-data">
+      <div class="form-group">
+        <label for="photos">{{ t('hostel_photos') }}</label>
+        <input id="photos" name="photos" type="file" accept="image/*" multiple required>
+      </div>
+      <button class="btn btn-primary" type="submit">{{ t('upload_btn') }}</button>
+    </form>
+    <p><a href="{{ url_for('hostel.dashboard') }}">&larr; {{ t('back') }}</a></p>
+  </div>
+</div>
+{% endblock %}
