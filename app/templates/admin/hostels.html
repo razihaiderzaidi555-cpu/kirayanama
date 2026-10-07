@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}{{ t('admin_hostels') }}{% endblock %}
+{% macro hostel_card(h) %}
+<div class="card">
+  {% set pp = h.primary_photo %}
+  {% if pp %}
+  <img class="listing-img" src="{{ url_for('static', filename='uploads/hostels/' + pp.filename) }}" alt="">
+  {% endif %}
+  <h3>{{ h.hostel_name_ur }}</h3>
+  <p class="muted">{{ t('hostel_owner_label') }}: {{ h.owner.name }} ({{ h.owner.public_id }}) · {{ t('phone') }}: {{ h.owner.phone }}</p>
+  <p class="muted">{{ t('district') }}: {{ district_name(h.district) }} · {{ t('owner_cnic') }}: {{ h.owner_cnic }}</p>
+  <p class="muted"><small>{{ t('hostel_address') }}: {{ h.address }}</small></p>
+  {% if h.phone_flag %}<p><span class="badge badge-red">{{ t('rejection_phone_reason') }}</span></p>{% endif %}
+  {% if h.cnic_copy %}<p><small>{{ t('cnic_copy') }}: <a href="{{ url_for('static', filename='uploads/hostel_docs/' + h.cnic_copy) }}" target="_blank">{{ t('view') }}</a></small></p>{% endif %}
+  <p><small>{{ t('proof_docs') }} ({{ proof_types_of(h)|join(', ') }}):</small>
+    {% for f in proof_files_of(h) %}
+    <a href="{{ url_for('static', filename='uploads/hostel_docs/' + f) }}" target="_blank">{{ loop.index }}</a>
+    {% endfor %}
+  </p>
+  <p>{{ t('fee_status') }}:
+    {% if not h.fee_due %}<span class="badge badge-green">{{ t('fee_not_due') }}</span>
+    {% elif h.fee_paid %}<span class="badge badge-green">{{ t('fee_paid_label') }}</span>
+    {% elif h.fee_screenshot %}<span class="badge badge-yellow">{{ t('fee_unpaid') }} — {{ t('view') }}:
+      <a href="{{ url_for('static', filename='uploads/fees/' + h.fee_screenshot) }}" target="_blank">{{ t('upload_fee_shot') }}</a></span>
+      <form method="post" action="{{ url_for('admin.verify_hostel_fee', hid=h.id) }}" style="display:inline">
+        <button type="submit" class="btn btn-primary btn-small">{{ t('fee_verified_msg') }}</button>
+      </form>
+    {% else %}<span class="badge badge-red">{{ t('fee_unpaid') }} — Rs {{ fee_amount }}</span>{% endif %}
+  </p>
+  <p>
+    {% if h.status == 'pending' %}<span class="badge badge-yellow">{{ t('status_pending') }}</span>
+    {% elif h.status == 'approved' %}<span class="badge badge-green">{{ t('status_approved') }}</span>
+    {% elif h.status == 'suspended' %}<span class="badge badge-red">{{ t('suspend') }}</span>
+    {% else %}<span class="badge badge-red">{{ t('status_rejected') }}</span>{% endif %}
+  </p>
+  {% if h.rejection_reason %}<p><small class="muted">{{ t('rejection_reason_label') }}: {{ h.rejection_reason }}</small></p>{% endif %}
+  <p>
+    {% if h.status == 'pending' %}
+    <form method="post" action="{{ url_for('admin.approve_hostel', hid=h.id) }}" style="display:inline">
+      <button type="submit" class="btn btn-primary btn-small">{{ t('approve') }}</button>
+    </form>
+    <form method="post" action="{{ url_for('admin.reject_hostel', hid=h.id) }}" style="display:inline">
+      <button type="submit" class="btn btn-danger btn-small">{{ t('reject') }}</button>
+    </form>
+    {% endif %}
+    {% if h.status == 'approved' %}
+    <form method="post" action="{{ url_for('admin.suspend_hostel', hid=h.id) }}" style="display:inline">
+      <button type="submit" class="btn btn-danger btn-small">{{ t('suspend') }}</button>
+    </form>
+    {% endif %}
+    {% if h.status == 'suspended' %}
+    <form method="post" action="{{ url_for('admin.unsuspend_hostel', hid=h.id) }}" style="display:inline">
+      <button type="submit" class="btn btn-primary btn-small">{{ t('unsuspend') }}</button>
+    </form>
+    {% endif %}
+  </p>
+</div>
+{% endmacro %}
+{% block content %}
+<div class="container">
+  <h1>{{ t('admin_hostels') }}</h1>
+  <p><a href="{{ url_for('admin.dashboard') }}">&larr; {{ t('back') }}</a></p>
+  <h2>{{ t('hostels_in_city') }}</h2>
+  <div class="card">
+    <table>
+      <tr><th>{{ t('district') }}</th><th>{{ t('hostels_in_city') }}</th><th>{{ t('free_slots_left') }}</th></tr>
+      {% for row in district_rows %}
+      <tr>
+        <td>{{ district_name(row.district) }}</td>
+        <td>{{ row.total }}</td>
+        <td>{{ row.free_left }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  <h2>{{ t('pending_listings') }} ({{ pending|length }})</h2>
+  {% if pending %}
+  <div class="grid grid-3">
+    {% for h in pending %}{{ hostel_card(h) }}{% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">{{ t('no_pending') }}</p>
+  {% endif %}
+  <h2>{{ t('status') }}</h2>
+  <div class="grid grid-3">
+    {% for h in rest %}{{ hostel_card(h) }}{% endfor %}
+  </div>
+</div>
+{% endblock %}
