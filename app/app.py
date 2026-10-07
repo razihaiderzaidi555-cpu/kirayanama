@@ -210,6 +210,24 @@ def _migrate_schema():
         conn.execute(text("UPDATE listings SET photo_status='approved' "
                           "WHERE photo_status IS NULL"))
     _backfill_hostel_expiry()
+    _migrate_open_districts()
+
+
+def _migrate_open_districts():
+    """One-time: 3-district default -> 3 full divisions (12 districts).
+
+    Upgrades only rows still holding the exact old default
+    ("lahore,faisalabad,sargodha"). A customized setting is left untouched.
+    Idempotent — after the upgrade the row no longer matches, so this is a
+    no-op on every later boot. Runs every boot so PythonAnywhere picks it up
+    on the next reload after git pull.
+    """
+    from models import (Setting, OPEN_DISTRICTS_DEFAULT,
+                        OPEN_DISTRICTS_OLD_DEFAULT)
+    s = Setting.query.get("open_districts")
+    if s is not None and (s.value or "").strip() == OPEN_DISTRICTS_OLD_DEFAULT:
+        s.value = OPEN_DISTRICTS_DEFAULT
+        db.session.commit()
 
 
 def _backfill_hostel_expiry():
