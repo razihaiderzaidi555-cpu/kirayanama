@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}{{ t('hostel_fee_due_title') }}{% endblock %}
+{% block content %}
+<div class="container">
+  <div class="card">
+    <h1>{{ t('hostel_fee_due_title') }}</h1>
+    <p>{{ t('hostel_fee_due_msg') }}</p>
+    <p><strong>{{ t('hostel_fee_info') }}</strong></p>
+    <p class="muted">{{ t('platform_numbers') }}: {{ t('jazzcash') }}: {{ jazzcash }} · {{ t('easypaisa') }}: {{ easypaisa }} · {{ t('upaisa') }}: {{ upaisa }} · {{ t('hbl') }}: {{ hbl }}</p>
+    <p>{{ t('payment_instructions') }}</p>
+    <form method="post" action="{{ url_for('hostel.fee', hid=hostel.id) }}" enctype="multipart/form-data">
+      <div class="form-group">
+        <label for="screenshot">{{ t('upload_fee_shot') }}</label>
+        <input id="screenshot" name="screenshot" type="file" accept="image/*" required>
+      </div>
+      <button class="btn btn-primary" type="submit">{{ t('upload_btn') }}</button>
+    </form>
+    <p><a href="{{ url_for('hostel.dashboard') }}">&larr; {{ t('back') }}</a></p>
+  </div>
+</div>
+{% endblock %}
