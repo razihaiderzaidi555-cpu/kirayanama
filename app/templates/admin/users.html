@@ -49,6 +49,10 @@
               <button type="submit" class="btn btn-small btn-secondary">{{ t('make_dealer') }}</button>
               {% endif %}
             </form>
+            <form method="post" action="{{ url_for('admin.admin_manage', uid=u.id) }}" style="display:inline">
+              <input type="hidden" name="action" value="make_admin">
+              <button type="submit" class="btn btn-small btn-secondary">{{ t('make_admin') }}</button>
+            </form>
             {% if u.role == 'dealer' %}
             <form method="post" action="{{ url_for('admin.dealer_manage', uid=u.id) }}" style="display:inline">
               {% if u.dealer_verified %}
@@ -65,6 +69,11 @@
               <button type="submit" class="btn btn-small btn-secondary">{{ t('set_share') }}</button>
             </form>
             {% endif %}
+            {% elif u.id != current_user.id %}
+            <form method="post" action="{{ url_for('admin.admin_manage', uid=u.id) }}" style="display:inline">
+              <input type="hidden" name="action" value="remove_admin">
+              <button type="submit" class="btn btn-small btn-secondary">{{ t('remove_admin') }}</button>
+            </form>
             {% endif %}
           </td>
         </tr>
