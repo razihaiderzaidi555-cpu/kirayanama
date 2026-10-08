@@ -146,6 +146,28 @@ def dealer_manage(uid):
     return redirect(url_for("admin.users"))
 
 
+@bp.route("/users/<int:uid>/admin", methods=["POST"])
+@admin_required
+def admin_manage(uid):
+    """Grant/revoke admin status. Guards: no self-demotion, never demote the last admin."""
+    u = User.query.get_or_404(uid)
+    action = request.form.get("action") or ""
+    if action == "make_admin":
+        u.role = "admin"
+        flash(_t("admin_granted"))
+    elif action == "remove_admin":
+        if u.id == current_user.id:
+            flash(_t("admin_self_deny"))
+            return redirect(url_for("admin.users"))
+        if User.query.filter_by(role="admin").count() <= 1:
+            flash(_t("admin_last_deny"))
+            return redirect(url_for("admin.users"))
+        u.role = "landlord"
+        flash(_t("admin_revoked"))
+    db.session.commit()
+    return redirect(url_for("admin.users"))
+
+
 @bp.route("/users/<int:uid>/warn", methods=["POST"])
 @admin_required
 def warn_user(uid):
